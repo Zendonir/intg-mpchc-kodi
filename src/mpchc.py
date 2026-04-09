@@ -50,6 +50,7 @@ class MpcHcClient:
     """Async HTTP client for MPC-HC web interface."""
 
     def __init__(self, host: str, port: int = 13579):
+        """Create MPC-HC client for the given host and port."""
         self._base = f"http://{host}:{port}"
         self._session: aiohttp.ClientSession | None = None
 
