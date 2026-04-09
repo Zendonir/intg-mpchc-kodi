@@ -816,56 +816,64 @@ class KodiDevice(IKodiDevice):
                 _LOG.error("[%s] Unknown exception %s", self.device_config.address, ex)
 
     async def _start_mpchc_poll_task(self):
-        """Poll MPC-HC and push state updates to the Remote.
+        """Poll MPC-HC only during active playback.
 
-        Interval adapts to playback state to preserve battery:
-        - Playing : 2 s
-        - Paused  : 15 s
-        - Stopped / unreachable : 30 s
+        - Not playing (paused/stopped/unreachable): no polling, wait 5 s then re-check state only
+        - Playing, not yet synced: poll every 2 s until first successful position read
+        - Playing, already synced: poll every 60 s to correct drift
         """
-        interval = 30
+        synced = False
         while self._mpchc is not None:
-            await asyncio.sleep(interval)
             try:
                 vars_ = await self._mpchc.get_variables()
-                if vars_ is None:
-                    interval = 30
-                    continue
-                updated_data = {}
-                pos = vars_.position // 1000
-                dur = vars_.duration // 1000
-                if self._media_position != pos or self._media_position_updated_at is None:
-                    self._media_position = pos
-                    updated_data[MediaAttr.MEDIA_POSITION] = pos
-                    self._media_position_updated_at = datetime.datetime.now(datetime.timezone.utc)
-                    updated_data["media_position_updated_at"] = self.media_position_updated_at
-                if self._media_duration != dur:
-                    self._media_duration = dur
-                    updated_data[MediaAttr.MEDIA_DURATION] = dur
-                if vars_.state == STATE_PLAYING:
-                    _state = MediaStates.PLAYING
-                    interval = 2
-                elif vars_.state == STATE_PAUSED:
-                    _state = MediaStates.PAUSED
-                    interval = 15
-                else:
-                    _state = MediaStates.ON
-                    interval = 30
-                if self._attr_state != _state:
-                    self._attr_state = _state
-                    updated_data[MediaAttr.STATE] = _state
-                if self._volume != vars_.volumelevel:
-                    self._volume = vars_.volumelevel
-                    updated_data[MediaAttr.VOLUME] = vars_.volumelevel
-                _muted = bool(vars_.muted)
-                if self._is_volume_muted != _muted:
-                    self._is_volume_muted = _muted
-                    updated_data[MediaAttr.MUTED] = _muted
-                if updated_data:
-                    self.events.emit(Events.UPDATE, self.id, updated_data)
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 _LOG.debug("[%s] MPC-HC poll error: %s", self.device_config.address, ex)
-                interval = 30
+                await asyncio.sleep(5)
+                continue
+
+            if vars_ is None or vars_.state != STATE_PLAYING:
+                # Not playing — update state once, then idle
+                if vars_ is not None:
+                    _state = MediaStates.PAUSED if vars_.state == STATE_PAUSED else MediaStates.ON
+                    if self._attr_state != _state:
+                        self._attr_state = _state
+                        self.events.emit(Events.UPDATE, self.id, {MediaAttr.STATE: _state})
+                synced = False
+                await asyncio.sleep(5)
+                continue
+
+            # MPC-HC is playing — build update payload
+            updated_data = {}
+            pos = vars_.position // 1000
+            dur = vars_.duration // 1000
+
+            if self._media_position != pos or self._media_position_updated_at is None:
+                self._media_position = pos
+                updated_data[MediaAttr.MEDIA_POSITION] = pos
+                self._media_position_updated_at = datetime.datetime.now(datetime.timezone.utc)
+                updated_data["media_position_updated_at"] = self.media_position_updated_at
+            if self._media_duration != dur:
+                self._media_duration = dur
+                updated_data[MediaAttr.MEDIA_DURATION] = dur
+            if self._attr_state != MediaStates.PLAYING:
+                self._attr_state = MediaStates.PLAYING
+                updated_data[MediaAttr.STATE] = MediaStates.PLAYING
+            if self._volume != vars_.volumelevel:
+                self._volume = vars_.volumelevel
+                updated_data[MediaAttr.VOLUME] = vars_.volumelevel
+            _muted = bool(vars_.muted)
+            if self._is_volume_muted != _muted:
+                self._is_volume_muted = _muted
+                updated_data[MediaAttr.MUTED] = _muted
+
+            if updated_data:
+                self.events.emit(Events.UPDATE, self.id, updated_data)
+
+            if not synced:
+                synced = True
+                await asyncio.sleep(2)
+            else:
+                await asyncio.sleep(60)
 
     @debounce(2)
     async def update_chapter_task(self):
