@@ -816,12 +816,20 @@ class KodiDevice(IKodiDevice):
                 _LOG.error("[%s] Unknown exception %s", self.device_config.address, ex)
 
     async def _start_mpchc_poll_task(self):
-        """Poll MPC-HC every 2 seconds and push state updates to the Remote."""
+        """Poll MPC-HC and push state updates to the Remote.
+
+        Interval adapts to playback state to preserve battery:
+        - Playing : 2 s
+        - Paused  : 15 s
+        - Stopped / unreachable : 30 s
+        """
+        interval = 30
         while self._mpchc is not None:
-            await asyncio.sleep(2)
+            await asyncio.sleep(interval)
             try:
                 vars_ = await self._mpchc.get_variables()
                 if vars_ is None:
+                    interval = 30
                     continue
                 updated_data = {}
                 pos = vars_.position // 1000
@@ -836,10 +844,13 @@ class KodiDevice(IKodiDevice):
                     updated_data[MediaAttr.MEDIA_DURATION] = dur
                 if vars_.state == STATE_PLAYING:
                     _state = MediaStates.PLAYING
+                    interval = 2
                 elif vars_.state == STATE_PAUSED:
                     _state = MediaStates.PAUSED
+                    interval = 15
                 else:
                     _state = MediaStates.ON
+                    interval = 30
                 if self._attr_state != _state:
                     self._attr_state = _state
                     updated_data[MediaAttr.STATE] = _state
@@ -854,6 +865,7 @@ class KodiDevice(IKodiDevice):
                     self.events.emit(Events.UPDATE, self.id, updated_data)
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 _LOG.debug("[%s] MPC-HC poll error: %s", self.device_config.address, ex)
+                interval = 30
 
     @debounce(2)
     async def update_chapter_task(self):
