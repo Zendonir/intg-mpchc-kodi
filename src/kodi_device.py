@@ -42,7 +42,6 @@ from ucapi.select import States as SelectStates
 
 import media_browser
 from config import KodiConfigDevice
-from mpchc import MpcHcClient, MpcHcVariables, STATE_PLAYING, STATE_PAUSED
 from const import (
     KODI_FEATURES,
     KODI_MEDIA_TYPES,
@@ -54,6 +53,7 @@ from const import (
     PlaylistInfo,
 )
 from languages import LANGUAGES, LANGUAGES_KEYS
+from mpchc import MpcHcClient, MpcHcVariables, STATE_PLAYING, STATE_PAUSED
 from pykodi.kodi import CannotConnectError, InvalidAuthError, Kodi, KodiWSConnection
 
 # pylint: disable=C0302
