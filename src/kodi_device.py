@@ -353,6 +353,7 @@ class KodiDevice(IKodiDevice):
         self._chapter_update_task: Task | None = None
         self._media_browser = media_browser.MediaBrowser(self)
         self._mpchc: MpcHcClient | None = None
+        self._mpchc_poll_task: Task | None = None
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(device_config.mpchc_host, device_config.mpchc_port)
 
@@ -582,6 +583,9 @@ class KodiDevice(IKodiDevice):
             # pylint: disable = W0718
             except Exception:
                 pass
+        if self._mpchc_poll_task is not None:
+            self._mpchc_poll_task.cancel()
+            self._mpchc_poll_task = None
         if self._mpchc is not None:
             await self._mpchc.close()
 
@@ -689,6 +693,8 @@ class KodiDevice(IKodiDevice):
                 self._websocket_task = self.event_loop.create_task(self.start_watchdog())
             if self._connection_status and not self._connection_status.done():
                 self._connection_status.set_result(True)
+            if self._mpchc is not None and self._mpchc_poll_task is None:
+                self._mpchc_poll_task = self.event_loop.create_task(self._start_mpchc_poll_task())
             if self._device_config.media_update_task and self._update_position_task is None:
                 self._update_position_task = self.event_loop.create_task(self.start_update_position_task())
             elif not self._device_config.media_update_task and self._update_position_task is not None:
@@ -808,6 +814,46 @@ class KodiDevice(IKodiDevice):
             # pylint: disable = W0718
             except Exception as ex:
                 _LOG.error("[%s] Unknown exception %s", self.device_config.address, ex)
+
+    async def _start_mpchc_poll_task(self):
+        """Poll MPC-HC every 2 seconds and push state updates to the Remote."""
+        while self._mpchc is not None:
+            await asyncio.sleep(2)
+            try:
+                vars_ = await self._mpchc.get_variables()
+                if vars_ is None:
+                    continue
+                updated_data = {}
+                pos = vars_.position // 1000
+                dur = vars_.duration // 1000
+                if self._media_position != pos or self._media_position_updated_at is None:
+                    self._media_position = pos
+                    updated_data[MediaAttr.MEDIA_POSITION] = pos
+                    self._media_position_updated_at = datetime.datetime.now(datetime.timezone.utc)
+                    updated_data["media_position_updated_at"] = self.media_position_updated_at
+                if self._media_duration != dur:
+                    self._media_duration = dur
+                    updated_data[MediaAttr.MEDIA_DURATION] = dur
+                if vars_.state == STATE_PLAYING:
+                    _state = MediaStates.PLAYING
+                elif vars_.state == STATE_PAUSED:
+                    _state = MediaStates.PAUSED
+                else:
+                    _state = MediaStates.ON
+                if self._attr_state != _state:
+                    self._attr_state = _state
+                    updated_data[MediaAttr.STATE] = _state
+                if self._volume != vars_.volumelevel:
+                    self._volume = vars_.volumelevel
+                    updated_data[MediaAttr.VOLUME] = vars_.volumelevel
+                _muted = bool(vars_.muted)
+                if self._is_volume_muted != _muted:
+                    self._is_volume_muted = _muted
+                    updated_data[MediaAttr.MUTED] = _muted
+                if updated_data:
+                    self.events.emit(Events.UPDATE, self.id, updated_data)
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("[%s] MPC-HC poll error: %s", self.device_config.address, ex)
 
     @debounce(2)
     async def update_chapter_task(self):
