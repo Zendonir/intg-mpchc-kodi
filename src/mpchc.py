@@ -38,10 +38,10 @@ class MpcHcVariables:
     """Parsed state from MPC-HC /variables.html."""
 
     state: int = STATE_STOPPED
-    position: int = 0       # milliseconds
-    duration: int = 0       # milliseconds
-    volumelevel: int = 0    # 0-100
-    muted: int = 0          # 0 or 1
+    position: int = 0  # milliseconds
+    duration: int = 0  # milliseconds
+    volumelevel: int = 0  # 0-100
+    muted: int = 0  # 0 or 1
     file: str = ""
     filepath: str = ""
 
