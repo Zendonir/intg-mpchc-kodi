@@ -1,0 +1,45 @@
+{
+  "driver_id": "mpchc_kodi_driver",
+  "version": "1.18.12",
+  "min_core_api": "0.20.0",
+  "name": {
+    "en": "Kodi + MPC-HC",
+    "de": "Kodi + MPC-HC"
+  },
+  "icon":"custom:kodi.png",
+  "description": {
+    "en": "Control Kodi with Remote 3. Optionally use MPC-HC as external player for accurate position and playback state.",
+    "de": "Steuere Kodi mit Remote 3. Optional MPC-HC als externen Player für exakte Position und Wiedergabestatus."
+  },
+  "developer": {
+    "name": "Zendonir",
+    "url": "https://github.com/Zendonir"
+  },
+  "home_page": "https://github.com/Zendonir/intg-mpchc-kodi",
+  "setup_data_schema": {
+    "title": {
+      "en": "Integration setup",
+      "de": "Integrations setup",
+      "fr": "Configuration de l'intégration"
+    },
+    "settings": [
+      {
+        "id": "info",
+        "label": {
+          "en": "Setup process",
+          "de": "Setup Fortschritt",
+          "fr": "Avancement de la configuration"
+        },
+        "field": {
+          "label": {
+            "value": {
+              "en": "The integration will let you configure your Kodi instances on your network.",
+              "fr": "Cette intégration permet de configurer vos instances Kodi dans le réseau."
+            }
+          }
+        }
+      }
+    ]
+  },
+  "release_date": "2026-04-07"
+}

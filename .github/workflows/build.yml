@@ -1,0 +1,130 @@
+# GitHub Action to build a self-contained aarch64 binary of the Kodi + MPC-HC driver
+---
+name: "Build & Release"
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+*
+
+env:
+  INTG_NAME: mpchc-kodi
+  HASH_FILENAME: uc-src.hash
+  PYTHON_VER: 3.11.13-0.4.0
+
+jobs:
+  build:
+    # ubuntu-24.04 has no qemu package — use 22.04
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 200
+
+      - name: Fetch all tags to determine version
+        run: |
+          git fetch origin +refs/tags/*:refs/tags/*
+          echo VERSION="v$(jq .version -r driver.json)" >> $GITHUB_ENV
+
+      - name: Verify driver.json version for release build
+        if: contains(github.ref, 'tags/v')
+        run: |
+          DRIVER_VERSION="v$(jq .version -r driver.json)"
+          if [ "${{ env.VERSION }}" != "$DRIVER_VERSION" ]; then
+            echo "Version in driver.json ($DRIVER_VERSION) doesn't match git tag (${{ env.VERSION }})!"
+            exit 1
+          fi
+
+      - name: Install QEMU for aarch64
+        run: |
+          sudo apt-get update && sudo apt-get install -y qemu binfmt-support qemu-user-static
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Build aarch64 binary with PyInstaller
+        run: |
+          echo "Starting PyInstaller build for aarch64"
+          docker run --rm --name builder \
+            --platform=linux/arm64 \
+            --user=$(id -u):$(id -g) \
+            -v ${GITHUB_WORKSPACE}:/workspace \
+            docker.io/unfoldedcircle/r2-pyinstaller:${PYTHON_VER} \
+            bash -c \
+            "cd /workspace && \
+              python -m pip install -r requirements.txt && \
+              pyinstaller --collect-submodules zeroconf --clean --onedir --name driver src/driver.py"
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts/bin
+          cp -r dist/driver/* artifacts/bin/
+          cp driver.json artifacts/
+          cp kodi.png artifacts/
+          echo "ARTIFACT_NAME=uc-intg-${{ env.INTG_NAME }}-${{ env.VERSION }}-aarch64" >> $GITHUB_ENV
+
+      - name: Create archive
+        run: |
+          tar czvf ${{ env.ARTIFACT_NAME }}.tar.gz -C ${GITHUB_WORKSPACE}/artifacts .
+          ls -lah ${{ env.ARTIFACT_NAME }}.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  release:
+    name: Create Release
+    if: github.ref == 'refs/heads/main' || contains(github.ref, 'tags/v')
+    runs-on: ubuntu-22.04
+    needs: [build]
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Extract archives from downloaded artifact directories
+        run: |
+          for D in */; do
+            if [ -d "$D" ]; then
+              mv "$D"* ./
+            fi
+          done
+
+      - name: Get timestamp
+        run: echo "TIMESTAMP=$(date +"%Y%m%d_%H%M%S")" >> $GITHUB_ENV
+
+      - name: Add timestamp to development builds
+        if: "!contains(github.ref, 'tags/v')"
+        run: |
+          for f in *.tar.gz; do mv "$f" "$(basename $f .tar.gz)-${{ env.TIMESTAMP }}.tar.gz"; done
+          for f in *.tar.gz; do echo "sha256  $(sha256sum $f)" >> ${{ env.HASH_FILENAME }}; done
+
+      - name: Create Pre-Release (main push)
+        if: "!contains(github.ref, 'tags/v')"
+        uses: softprops/action-gh-release@v2
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          tag_name: "latest"
+          prerelease: true
+          name: "Development Build"
+          files: |
+            *.tar.gz
+            ${{ env.HASH_FILENAME }}
+
+      - name: Create checksums for release
+        if: "contains(github.ref, 'tags/v')"
+        run: |
+          for f in *.tar.gz; do echo "sha256  $(sha256sum $f)" >> ${{ env.HASH_FILENAME }}; done
+
+      - name: Create Release (version tag)
+        if: "contains(github.ref, 'tags/v')"
+        uses: softprops/action-gh-release@v2
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          files: |
+            *.tar.gz
+            ${{ env.HASH_FILENAME }}
