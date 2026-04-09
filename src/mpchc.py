@@ -5,6 +5,7 @@ Parses /variables.html for playback state and sends commands via /command.html.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 
 import aiohttp
@@ -65,7 +66,7 @@ class MpcHcClient:
                     return None
                 html = await resp.text()
             return _parse_variables(html)
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOG.debug("MPC-HC not reachable at %s: %s", self._base, ex)
             return None
 
@@ -78,7 +79,7 @@ class MpcHcClient:
                 allow_redirects=False,
             ) as resp:
                 return resp.status in (200, 302)
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOG.debug("MPC-HC command %d failed: %s", wm_command, ex)
             return False
 
@@ -91,8 +92,6 @@ class MpcHcClient:
 
 def _parse_variables(html: str) -> MpcHcVariables:
     """Parse MPC-HC /variables.html and return MpcHcVariables."""
-    import re
-
     vars_ = MpcHcVariables()
     for match in re.finditer(r'<p\s+id="([^"]+)">([^<]*)</p>', html):
         key, value = match.group(1), match.group(2).strip()

@@ -42,7 +42,7 @@ from ucapi.select import States as SelectStates
 
 import media_browser
 from config import KodiConfigDevice
-from mpchc import MpcHcClient, MpcHcVariables, STATE_PLAYING, STATE_PAUSED, STATE_STOPPED
+from mpchc import MpcHcClient, MpcHcVariables, STATE_PLAYING, STATE_PAUSED
 from const import (
     KODI_FEATURES,
     KODI_MEDIA_TYPES,
