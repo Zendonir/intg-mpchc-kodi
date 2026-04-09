@@ -53,7 +53,7 @@ from const import (
     PlaylistInfo,
 )
 from languages import LANGUAGES, LANGUAGES_KEYS
-from mpchc import MpcHcClient, MpcHcVariables, STATE_PLAYING, STATE_PAUSED
+from mpchc import STATE_PAUSED, STATE_PLAYING, MpcHcClient, MpcHcVariables
 from pykodi.kodi import CannotConnectError, InvalidAuthError, Kodi, KodiWSConnection
 
 # pylint: disable=C0302
