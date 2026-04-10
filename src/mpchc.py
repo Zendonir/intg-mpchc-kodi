@@ -29,6 +29,29 @@ CMD_SEEK_BWD = 900
 CMD_SEEK_FWD_L = 901
 CMD_SEEK_BWD_L = 902
 CMD_FULLSCREEN = 830
+CMD_AUDIO_NEXT = 952
+CMD_SUB_PREV = 953
+CMD_SUB_NEXT = 954
+CMD_SUB_TOGGLE = 955
+CMD_SUB_DELAY_MINUS = 957
+CMD_SUB_DELAY_PLUS = 958
+CMD_AUDIO_DELAY_MINUS = 945
+CMD_AUDIO_DELAY_PLUS = 946
+
+# Named commands exposed as UC Remote simple commands (lowercase, prefixed with "mpchc_")
+MPCHC_COMMANDS: dict[str, int] = {
+    "mpchc_play_pause": CMD_PLAY_PAUSE,
+    "mpchc_stop": CMD_STOP,
+    "mpchc_fullscreen": CMD_FULLSCREEN,
+    "mpchc_audio_next": CMD_AUDIO_NEXT,
+    "mpchc_audio_delay_plus": CMD_AUDIO_DELAY_PLUS,
+    "mpchc_audio_delay_minus": CMD_AUDIO_DELAY_MINUS,
+    "mpchc_sub_next": CMD_SUB_NEXT,
+    "mpchc_sub_prev": CMD_SUB_PREV,
+    "mpchc_sub_toggle": CMD_SUB_TOGGLE,
+    "mpchc_sub_delay_plus": CMD_SUB_DELAY_PLUS,
+    "mpchc_sub_delay_minus": CMD_SUB_DELAY_MINUS,
+}
 
 _TIMEOUT = aiohttp.ClientTimeout(total=3)
 
@@ -44,6 +67,8 @@ class MpcHcVariables:
     muted: int = 0  # 0 or 1
     file: str = ""
     filepath: str = ""
+    audio_track: str = ""
+    subtitle_track: str = ""
 
 
 class MpcHcClient:
@@ -111,6 +136,10 @@ def _parse_variables(html: str) -> MpcHcVariables:
                 vars_.file = value
             elif key == "filepath":
                 vars_.filepath = value
+            elif key == "audiotrack":
+                vars_.audio_track = value
+            elif key == "subtitletrack":
+                vars_.subtitle_track = value
         except ValueError:
             pass
     return vars_

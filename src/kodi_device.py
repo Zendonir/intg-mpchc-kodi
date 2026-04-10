@@ -53,7 +53,13 @@ from const import (
     PlaylistInfo,
 )
 from languages import LANGUAGES, LANGUAGES_KEYS
-from mpchc import STATE_PAUSED, STATE_PLAYING, MpcHcClient, MpcHcVariables
+from mpchc import (
+    MPCHC_COMMANDS,
+    STATE_PAUSED,
+    STATE_PLAYING,
+    MpcHcClient,
+    MpcHcVariables,
+)
 from pykodi.kodi import CannotConnectError, InvalidAuthError, Kodi, KodiWSConnection
 
 # pylint: disable=C0302
@@ -354,6 +360,7 @@ class KodiDevice(IKodiDevice):
         self._media_browser = media_browser.MediaBrowser(self)
         self._mpchc: MpcHcClient | None = None
         self._mpchc_poll_task: Task | None = None
+        self._mpchc_audio_track: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(device_config.mpchc_host, device_config.mpchc_port)
 
@@ -865,6 +872,9 @@ class KodiDevice(IKodiDevice):
             if self._is_volume_muted != _muted:
                 self._is_volume_muted = _muted
                 updated_data[MediaAttr.MUTED] = _muted
+            if vars_.audio_track and self._mpchc_audio_track != vars_.audio_track:
+                self._mpchc_audio_track = vars_.audio_track
+                updated_data[MediaAttr.SOUND_MODE] = vars_.audio_track
 
             if updated_data:
                 self.events.emit(Events.UPDATE, self.id, updated_data)
@@ -874,6 +884,16 @@ class KodiDevice(IKodiDevice):
                 await asyncio.sleep(2)
             else:
                 await asyncio.sleep(60)
+
+    async def mpchc_send_named(self, name: str) -> ucapi.StatusCodes:
+        """Send a named MPC-HC WM_COMMAND. Returns NOT_IMPLEMENTED if MPC-HC is not configured."""
+        if self._mpchc is None:
+            return ucapi.StatusCodes.NOT_IMPLEMENTED
+        cmd_id = MPCHC_COMMANDS.get(name)
+        if cmd_id is None:
+            return ucapi.StatusCodes.BAD_REQUEST
+        ok = await self._mpchc.send_command(cmd_id)
+        return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
     @debounce(2)
     async def update_chapter_task(self):
@@ -1071,6 +1091,9 @@ class KodiDevice(IKodiDevice):
                         if self._is_volume_muted != _mpchc_muted:
                             self._is_volume_muted = _mpchc_muted
                             updated_data[MediaAttr.MUTED] = _mpchc_muted
+                        if _mpchc_vars.audio_track and self._mpchc_audio_track != _mpchc_vars.audio_track:
+                            self._mpchc_audio_track = _mpchc_vars.audio_track
+                            updated_data[MediaAttr.SOUND_MODE] = _mpchc_vars.audio_track
 
                 if current_video_info != self.video_info:
                     updated_data[KodiSensors.SENSOR_VIDEO_INFO] = self.video_info

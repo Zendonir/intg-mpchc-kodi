@@ -33,6 +33,7 @@ from const import (
     MethodCall,
     filter_attributes,
 )
+from mpchc import MPCHC_COMMANDS
 
 _LOG = logging.getLogger(__name__)
 
@@ -53,7 +54,11 @@ class KodiMediaPlayer(KodiEntity, MediaPlayer):
         #     features.append(Features.SELECT_SOUND_MODE)
         #     attributes[Attributes.SOUND_MODE] = ""
         #     attributes[Attributes.SOUND_MODE_LIST] = []
-        simple_commands = [*list(KODI_SIMPLE_COMMANDS.keys()), *list(KODI_ADVANCED_SIMPLE_COMMANDS.keys())]
+        simple_commands = [
+            *list(KODI_SIMPLE_COMMANDS.keys()),
+            *list(KODI_ADVANCED_SIMPLE_COMMANDS.keys()),
+            *list(MPCHC_COMMANDS.keys()),
+        ]
         simple_commands.sort()
         options = {Options.SIMPLE_COMMANDS: simple_commands}
         super().__init__(
@@ -168,6 +173,8 @@ class KodiMediaPlayer(KodiEntity, MediaPlayer):
         # pylint: disable=R0911,R0915
         arguments = command.split(" ", 1)
         command_key = arguments[0].lower()
+        if command_key in MPCHC_COMMANDS:
+            return await device.mpchc_send_named(command_key)
         if command_key == "activatewindow" and len(arguments) == 2:
             arguments = {"window": arguments[1]}
             _LOG.debug("[%s] Custom command GUI.ActivateWindow %s", device.device_config.address, arguments)
