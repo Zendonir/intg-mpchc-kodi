@@ -19,39 +19,77 @@ STATE_STOPPED = 0
 STATE_PAUSED = 1
 STATE_PLAYING = 2
 
-# MPC-HC wm_command IDs
+# MPC-HC wm_command IDs (verified against controls.html)
 CMD_PLAY_PAUSE = 889
 CMD_STOP = 890
+CMD_FRAME_STEP = 891
+CMD_FRAME_STEP_BACK = 892
+CMD_SPEED_DOWN = 894
+CMD_SPEED_UP = 895
+CMD_SPEED_RESET = 896
+CMD_SEEK_BWD_SMALL = 899
+CMD_SEEK_FWD_SMALL = 900
+CMD_SEEK_BWD_LARGE = 903
+CMD_SEEK_FWD_LARGE = 904
 CMD_PREV = 921
 CMD_NEXT = 922
 CMD_VOL_UP = 907
 CMD_VOL_DOWN = 908
 CMD_MUTE = 909
-CMD_SEEK_FWD = 899
-CMD_SEEK_BWD = 900
-CMD_SEEK_FWD_L = 901
-CMD_SEEK_BWD_L = 902
 CMD_FULLSCREEN = 830
+CMD_ZOOM_FIT = 836
+CMD_ZOOM_100 = 834
 CMD_AUDIO_NEXT = 952
-CMD_SUB_PREV = 953
+CMD_AUDIO_PREV = 953
 CMD_SUB_NEXT = 954
-CMD_SUB_TOGGLE = 955
+CMD_SUB_PREV = 955
 CMD_SUB_DELAY_MINUS = 957
 CMD_SUB_DELAY_PLUS = 958
 CMD_AUDIO_DELAY_MINUS = 945
 CMD_AUDIO_DELAY_PLUS = 946
+CMD_CHAPTER_NEXT = 918
+CMD_CHAPTER_PREV = 916
 
-# Named commands exposed as UC Remote simple commands (lowercase, prefixed with "mpchc_")
+# Named commands exposed as UC Remote simple commands (prefixed with "mpchc_").
+# When routing through the bridge, the "mpchc_" prefix is stripped and the remainder
+# is used as the bridge command name (POST /command/<name>).
+# The integer values are only used in direct mode (no bridge configured).
 MPCHC_COMMANDS: dict[str, int] = {
+    # Playback
     "mpchc_play_pause": CMD_PLAY_PAUSE,
     "mpchc_stop": CMD_STOP,
+    "mpchc_prev": CMD_PREV,
+    "mpchc_next": CMD_NEXT,
+    "mpchc_frame_step": CMD_FRAME_STEP,
+    "mpchc_frame_step_back": CMD_FRAME_STEP_BACK,
+    # Seek
+    "mpchc_seek_fwd_small": CMD_SEEK_FWD_SMALL,
+    "mpchc_seek_bwd_small": CMD_SEEK_BWD_SMALL,
+    "mpchc_seek_fwd_large": CMD_SEEK_FWD_LARGE,
+    "mpchc_seek_bwd_large": CMD_SEEK_BWD_LARGE,
+    # Chapters
+    "mpchc_chapter_next": CMD_CHAPTER_NEXT,
+    "mpchc_chapter_prev": CMD_CHAPTER_PREV,
+    # Speed
+    "mpchc_speed_up": CMD_SPEED_UP,
+    "mpchc_speed_down": CMD_SPEED_DOWN,
+    "mpchc_speed_reset": CMD_SPEED_RESET,
+    # View
     "mpchc_fullscreen": CMD_FULLSCREEN,
+    "mpchc_zoom_fit": CMD_ZOOM_FIT,
+    "mpchc_zoom_100": CMD_ZOOM_100,
+    # Volume
+    "mpchc_vol_up": CMD_VOL_UP,
+    "mpchc_vol_down": CMD_VOL_DOWN,
+    "mpchc_mute": CMD_MUTE,
+    # Audio tracks
     "mpchc_audio_next": CMD_AUDIO_NEXT,
+    "mpchc_audio_prev": CMD_AUDIO_PREV,
     "mpchc_audio_delay_plus": CMD_AUDIO_DELAY_PLUS,
     "mpchc_audio_delay_minus": CMD_AUDIO_DELAY_MINUS,
+    # Subtitles
     "mpchc_sub_next": CMD_SUB_NEXT,
     "mpchc_sub_prev": CMD_SUB_PREV,
-    "mpchc_sub_toggle": CMD_SUB_TOGGLE,
     "mpchc_sub_delay_plus": CMD_SUB_DELAY_PLUS,
     "mpchc_sub_delay_minus": CMD_SUB_DELAY_MINUS,
 }
@@ -106,13 +144,19 @@ class MpcHcClient:
             return None
 
     async def send_named_command(self, name: str) -> bool:
-        """Send a named command via the bridge (POST /command/{name}) or direct MPC-HC HTTP."""
+        """Send a named command via the bridge (POST /command/{name}) or direct MPC-HC HTTP.
+
+        The bridge uses unprefixed names (e.g. "play_pause").  UC Remote simple commands
+        carry the "mpchc_" prefix (e.g. "mpchc_play_pause") — the prefix is stripped here.
+        Direct calls from device methods already pass the unprefixed bridge name.
+        """
+        bridge_name = name.removeprefix("mpchc_")
         if self._bridge:
             try:
-                async with self._get_session().post(f"{self._bridge}/command/{name}") as resp:
+                async with self._get_session().post(f"{self._bridge}/command/{bridge_name}") as resp:
                     return resp.status == 200
             except Exception as ex:  # pylint: disable=broad-exception-caught
-                _LOG.debug("MPC-HC bridge command '%s' failed: %s", name, ex)
+                _LOG.debug("MPC-HC bridge command '%s' failed: %s", bridge_name, ex)
                 return False
         cmd_id = MPCHC_COMMANDS.get(name)
         return await self.send_command(cmd_id) if cmd_id is not None else False

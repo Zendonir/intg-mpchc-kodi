@@ -2020,6 +2020,9 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def media_seek(self, position: float):
         """Send seek command."""
+        if self._mpchc is not None:
+            await self._mpchc.seek(int(position * 1000))
+            return ucapi.StatusCodes.OK
         await self._kodi.media_seek(position)
         await self.update_chapter_task()
 
@@ -2135,6 +2138,9 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_subtitle_track(self, track_name: str):
         """Skip to given subtitle track name."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("sub_next")
+            return ucapi.StatusCodes.OK
         if self._no_active_players:
             return
         for track in self.subtitle_tracks:
