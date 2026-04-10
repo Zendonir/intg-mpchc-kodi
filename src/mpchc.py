@@ -75,11 +75,17 @@ class MpcHcVariables:
 
 
 class MpcHcClient:
-    """Async HTTP client for MPC-HC web interface."""
+    """Async HTTP client for MPC-HC web interface.
 
-    def __init__(self, host: str, port: int = 13579):
-        """Create MPC-HC client for the given host and port."""
+    When bridge_port is provided, named commands are routed through the bridge's
+    POST /command/{name} endpoint (which uses PostMessageW — lower latency than
+    MPC-HC's own HTTP interface). State polling always goes directly to MPC-HC.
+    """
+
+    def __init__(self, host: str, port: int = 13579, bridge_port: int = 0):
+        """Create MPC-HC client. bridge_port > 0 routes commands through the bridge."""
         self._base = f"http://{host}:{port}"
+        self._bridge_cmd_base = f"http://{host}:{bridge_port}/command" if bridge_port > 0 else None
         self._session: aiohttp.ClientSession | None = None
 
     def _get_session(self) -> aiohttp.ClientSession:
@@ -99,8 +105,24 @@ class MpcHcClient:
             _LOG.debug("MPC-HC not reachable at %s: %s", self._base, ex)
             return None
 
+    async def send_named_command(self, name: str) -> bool:
+        """Send a named command via the bridge (POST /command/{name}).
+
+        Uses PostMessageW on the Windows side — preferred over send_command() when
+        the bridge is configured. Falls back to send_command() if bridge not set.
+        """
+        if self._bridge_cmd_base is None:
+            cmd_id = MPCHC_COMMANDS.get(name)
+            return await self.send_command(cmd_id) if cmd_id is not None else False
+        try:
+            async with self._get_session().post(f"{self._bridge_cmd_base}/{name}") as resp:
+                return resp.status == 200
+        except Exception as ex:  # pylint: disable=broad-exception-caught
+            _LOG.debug("MPC-HC bridge command '%s' failed: %s", name, ex)
+            return False
+
     async def send_command(self, wm_command: int) -> bool:
-        """Send a command to MPC-HC. Returns True on success."""
+        """Send a raw WM_COMMAND ID directly to MPC-HC's HTTP interface."""
         try:
             async with self._get_session().get(
                 f"{self._base}/command.html",

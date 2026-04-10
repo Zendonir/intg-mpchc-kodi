@@ -365,7 +365,11 @@ class KodiDevice(IKodiDevice):
         self._mpchc_ws_task: Task | None = None
         self._mpchc_audio_track: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
-            self._mpchc = MpcHcClient(device_config.mpchc_host, device_config.mpchc_port)
+            self._mpchc = MpcHcClient(
+                device_config.mpchc_host,
+                device_config.mpchc_port,
+                device_config.mpchc_bridge_port,
+            )
             if device_config.mpchc_bridge_port > 0:
                 self._mpchc_ws = MpcHcBridgeWs(device_config.mpchc_host, device_config.mpchc_bridge_port)
                 self._mpchc_ws.set_callback(self._on_mpchc_push)
@@ -901,10 +905,9 @@ class KodiDevice(IKodiDevice):
         """Send a named MPC-HC WM_COMMAND. Returns NOT_IMPLEMENTED if MPC-HC is not configured."""
         if self._mpchc is None:
             return ucapi.StatusCodes.NOT_IMPLEMENTED
-        cmd_id = MPCHC_COMMANDS.get(name)
-        if cmd_id is None:
+        if name not in MPCHC_COMMANDS:
             return ucapi.StatusCodes.BAD_REQUEST
-        ok = await self._mpchc.send_command(cmd_id)
+        ok = await self._mpchc.send_named_command(name)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
     async def _on_mpchc_push(self, data: dict) -> None:
@@ -1108,7 +1111,9 @@ class KodiDevice(IKodiDevice):
                     updated_data[MediaAttr.MEDIA_DURATION] = duration
 
                 # MPC-HC override: replace position, duration, state, volume, muted
-                if self._mpchc is not None:
+                # Skip the direct poll when the bridge WebSocket is active — _on_mpchc_push
+                # already keeps all instance variables current via push events.
+                if self._mpchc is not None and self._mpchc_ws is None:
                     _mpchc_vars: MpcHcVariables | None = await self._mpchc.get_variables()
                     if _mpchc_vars is not None:
                         _mpchc_pos = _mpchc_vars.position // 1000
