@@ -121,9 +121,7 @@ class MpcHcClient:
         """Seek to absolute position in milliseconds."""
         if self._bridge:
             try:
-                async with self._get_session().post(
-                    f"{self._bridge}/seek", params={"pos_ms": pos_ms}
-                ) as resp:
+                async with self._get_session().post(f"{self._bridge}/seek", params={"pos_ms": pos_ms}) as resp:
                     return resp.status == 200
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 _LOG.debug("MPC-HC bridge seek failed: %s", ex)
@@ -143,9 +141,7 @@ class MpcHcClient:
         """Set volume 0-100."""
         if self._bridge:
             try:
-                async with self._get_session().post(
-                    f"{self._bridge}/volume", params={"level": level}
-                ) as resp:
+                async with self._get_session().post(f"{self._bridge}/volume", params={"level": level}) as resp:
                     return resp.status == 200
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 _LOG.debug("MPC-HC bridge volume set failed: %s", ex)
