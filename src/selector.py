@@ -154,6 +154,8 @@ class KodiAudioStreamSelect(KodiSelect):
     @property
     def select_options(self) -> list[str]:
         """Return selection list."""
+        if self._device._mpchc is not None:
+            return self._device.mpchc_audio_track_labels
         return [
             x.get_track_name(KodiStreamConfig(self._config_device.sensor_audio_stream_config))
             for x in self._device.audio_tracks
@@ -189,6 +191,8 @@ class KodiSubtitleStreamSelect(KodiSelect):
     @property
     def select_options(self) -> list[str]:
         """Return selection list."""
+        if self._device._mpchc is not None:
+            return self._device.mpchc_subtitle_track_labels
         return [
             x.get_track_name(KodiStreamConfig(self._config_device.sensor_subtitle_stream_config))
             for x in self._device.subtitle_tracks

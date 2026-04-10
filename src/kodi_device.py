@@ -364,6 +364,9 @@ class KodiDevice(IKodiDevice):
         self._mpchc_ws: MpcHcBridgeWs | None = None
         self._mpchc_ws_task: Task | None = None
         self._mpchc_audio_track: str = ""
+        self._mpchc_subtitle_track: str = ""
+        self._mpchc_tracks: dict | None = None
+        self._mpchc_filepath: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(
                 device_config.mpchc_host,
@@ -891,6 +894,13 @@ class KodiDevice(IKodiDevice):
             if vars_.audio_track and self._mpchc_audio_track != vars_.audio_track:
                 self._mpchc_audio_track = vars_.audio_track
                 updated_data[MediaAttr.SOUND_MODE] = vars_.audio_track
+                updated_data[KodiSensors.SENSOR_AUDIO_STREAM] = vars_.audio_track
+            if self._mpchc_subtitle_track != vars_.subtitle_track:
+                self._mpchc_subtitle_track = vars_.subtitle_track
+                updated_data[KodiSensors.SENSOR_SUBTITLE_STREAM] = vars_.subtitle_track
+            if vars_.filepath and self._mpchc_filepath != vars_.filepath:
+                self._mpchc_filepath = vars_.filepath
+                asyncio.create_task(self._mpchc_fetch_tracks())
 
             if updated_data:
                 self.events.emit(Events.UPDATE, self.id, updated_data)
@@ -931,6 +941,20 @@ class KodiDevice(IKodiDevice):
         ok = await self._mpchc.send_named_command(name)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
+    async def _mpchc_fetch_tracks(self) -> None:
+        """Fetch and cache audio/subtitle track list from bridge /tracks endpoint."""
+        if self._mpchc is None:
+            return
+        tracks = await self._mpchc.get_tracks()
+        if tracks:
+            self._mpchc_tracks = tracks
+            _LOG.debug(
+                "[%s] MPC-HC tracks: %d audio, %d subtitle",
+                self.device_config.address,
+                len(tracks.get("audio", [])),
+                len(tracks.get("subtitle", [])),
+            )
+
     async def _on_mpchc_push(self, data: dict) -> None:
         """Handle a pushed state-diff from mpchc-bridge WebSocket."""
         updated: dict = {}
@@ -963,6 +987,10 @@ class KodiDevice(IKodiDevice):
         if data.get("audio_track") and self._mpchc_audio_track != data["audio_track"]:
             self._mpchc_audio_track = data["audio_track"]
             updated[MediaAttr.SOUND_MODE] = data["audio_track"]
+            updated[KodiSensors.SENSOR_AUDIO_STREAM] = data["audio_track"]
+        if "subtitle_track" in data and self._mpchc_subtitle_track != data.get("subtitle_track", ""):
+            self._mpchc_subtitle_track = data.get("subtitle_track", "")
+            updated[KodiSensors.SENSOR_SUBTITLE_STREAM] = self._mpchc_subtitle_track
         if updated:
             self.events.emit(Events.UPDATE, self.id, updated)
 
@@ -1780,6 +1808,8 @@ class KodiDevice(IKodiDevice):
     @property
     def sensor_audio_stream(self) -> str:
         """Return the sensor audio stream."""
+        if self._mpchc is not None:
+            return self._mpchc_audio_track
         current_track = self.current_audio_track
         if current_track is None:
             return ""
@@ -1809,20 +1839,48 @@ class KodiDevice(IKodiDevice):
     @property
     def sensor_subtitle_stream(self) -> str:
         """Return the sensor subtitle stream."""
+        if self._mpchc is not None:
+            return self._mpchc_subtitle_track
         current_track = self.current_subtitle_track
         if current_track is None:
             return ""
         return current_track.get_track_name(KodiStreamConfig(self.device_config.sensor_subtitle_stream_config))
 
     @property
+    def selector_audio_stream(self) -> str:
+        """Return current audio stream label for the selector (current option)."""
+        if self._mpchc is not None:
+            if self._mpchc_tracks:
+                sel = next((t for t in self._mpchc_tracks.get("audio", []) if t.get("selected")), None)
+                if sel:
+                    return sel.get("label", self._mpchc_audio_track)
+            return self._mpchc_audio_track
+        return self.sensor_audio_stream
+
+    @property
     def selector_subtitle_stream(self) -> str:
-        """Return the sensor subtitle stream."""
+        """Return current subtitle stream label for the selector (current option)."""
+        if self._mpchc is not None:
+            if self._mpchc_tracks:
+                sel = next((t for t in self._mpchc_tracks.get("subtitle", []) if t.get("selected")), None)
+                if sel:
+                    return sel.get("label", self._mpchc_subtitle_track)
+            return self._mpchc_subtitle_track
         return self.sensor_subtitle_stream
 
     @property
-    def selector_audio_stream(self) -> str:
-        """Return the sensor subtitle stream."""
-        return self.sensor_audio_stream
+    def mpchc_audio_track_labels(self) -> list[str]:
+        """List of audio track labels from MPC-HC for use as selector options."""
+        if self._mpchc_tracks:
+            return [t.get("label", t.get("name", "")) for t in self._mpchc_tracks.get("audio", [])]
+        return [self._mpchc_audio_track] if self._mpchc_audio_track else []
+
+    @property
+    def mpchc_subtitle_track_labels(self) -> list[str]:
+        """List of subtitle track labels from MPC-HC for use as selector options."""
+        if self._mpchc_tracks:
+            return [t.get("label", t.get("name", "")) for t in self._mpchc_tracks.get("subtitle", [])]
+        return [self._mpchc_subtitle_track] if self._mpchc_subtitle_track else []
 
     @property
     def source(self) -> str:
@@ -1908,6 +1966,8 @@ class KodiDevice(IKodiDevice):
     @property
     def audio_info(self) -> str:
         """Audio information."""
+        if self._mpchc is not None:
+            return self._mpchc_audio_track
         current_audio_stream = self._properties.get("currentaudiostream", {})
         if not current_audio_stream:
             return ""
@@ -2134,7 +2194,11 @@ class KodiDevice(IKodiDevice):
     async def select_audio_track(self, track_name: str):
         """Skip to given audio track name."""
         if self._mpchc is not None:
-            # MPC-HC doesn't expose a track list — cycle to next track
+            if self._mpchc_tracks:
+                for t in self._mpchc_tracks.get("audio", []):
+                    if t.get("label", t.get("name", "")) == track_name:
+                        return await self.mpchc_audio_select(t["pos"])
+            # fallback: cycle
             await self._mpchc.send_named_command("audio_next")
             return ucapi.StatusCodes.OK
         if self._no_active_players:
@@ -2153,6 +2217,11 @@ class KodiDevice(IKodiDevice):
     async def select_subtitle_track(self, track_name: str):
         """Skip to given subtitle track name."""
         if self._mpchc is not None:
+            if self._mpchc_tracks:
+                for t in self._mpchc_tracks.get("subtitle", []):
+                    if t.get("label", t.get("name", "")) == track_name:
+                        return await self.mpchc_subtitle_select(t["pos"])
+            # fallback: cycle
             await self._mpchc.send_named_command("sub_next")
             return ucapi.StatusCodes.OK
         if self._no_active_players:

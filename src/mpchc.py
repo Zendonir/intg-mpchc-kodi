@@ -161,6 +161,18 @@ class MpcHcClient:
         cmd_id = MPCHC_COMMANDS.get(name)
         return await self.send_command(cmd_id) if cmd_id is not None else False
 
+    async def get_tracks(self) -> dict | None:
+        """Fetch audio + subtitle track list from bridge /tracks. Returns None if unavailable."""
+        if not self._bridge:
+            return None
+        try:
+            async with self._get_session().get(f"{self._bridge}/tracks") as resp:
+                if resp.status == 200:
+                    return await resp.json()
+        except Exception as ex:  # pylint: disable=broad-exception-caught
+            _LOG.debug("MPC-HC bridge tracks failed: %s", ex)
+        return None
+
     async def select_audio(self, pos: int) -> bool:
         """Select audio track by 0-based position (cycles via bridge)."""
         if self._bridge:
