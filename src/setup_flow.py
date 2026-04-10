@@ -133,6 +133,14 @@ class SetupFlow:
                 "id": "mpchc_port",
                 "label": {"en": "MPC-HC port", "de": "MPC-HC Port"},
             },
+            {
+                "field": {"text": {"value": "0"}},
+                "id": "mpchc_bridge_port",
+                "label": {
+                    "en": "Bridge port (0 = HTTP polling, 13580 = WebSocket push)",
+                    "de": "Bridge Port (0 = HTTP Polling, 13580 = WebSocket Push)",
+                },
+            },
             *copy.deepcopy(SETUP_FIELDS),
         ],
     )
@@ -635,6 +643,10 @@ class SetupFlow:
             mpchc_port = int(msg.input_values.get("mpchc_port", "13579"))
         except ValueError:
             mpchc_port = 13579
+        try:
+            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "0"))
+        except ValueError:
+            mpchc_bridge_port = 0
 
         try:
             sensor_audio_stream_config = int(
@@ -739,6 +751,7 @@ class SetupFlow:
                 browse_media_root=browse_media_root,
                 mpchc_host=mpchc_host,
                 mpchc_port=mpchc_port,
+                mpchc_bridge_port=mpchc_bridge_port,
                 mpchc_enabled=mpchc_enabled,
             )
         )  # triggers SonyLG TV instance creation
@@ -788,6 +801,10 @@ class SetupFlow:
             mpchc_port = int(msg.input_values.get("mpchc_port", "13579"))
         except ValueError:
             mpchc_port = 13579
+        try:
+            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "0"))
+        except ValueError:
+            mpchc_bridge_port = 0
         name = msg.input_values["name"]
         try:
             sensor_audio_stream_config = int(
@@ -827,6 +844,7 @@ class SetupFlow:
         self._reconfigured_device.browse_media_root = browse_media_root
         self._reconfigured_device.mpchc_host = mpchc_host
         self._reconfigured_device.mpchc_port = mpchc_port
+        self._reconfigured_device.mpchc_bridge_port = mpchc_bridge_port
         self._reconfigured_device.mpchc_enabled = mpchc_enabled
 
         config.devices.add_or_update(self._reconfigured_device)  # triggers ATV instance update

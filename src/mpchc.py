@@ -4,9 +4,12 @@ MPC-HC HTTP client for UC Remote integration.
 Parses /variables.html for playback state and sends commands via /command.html.
 """
 
+import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 import aiohttp
 
@@ -143,3 +146,41 @@ def _parse_variables(html: str) -> MpcHcVariables:
         except ValueError:
             pass
     return vars_
+
+
+class MpcHcBridgeWs:
+    """Persistent WebSocket client for mpchc-bridge /ws push endpoint.
+
+    Calls the registered async callback with a dict of changed fields on every push.
+    Reconnects automatically after any disconnection.
+    """
+
+    def __init__(self, host: str, port: int):
+        """Create WebSocket client pointing at ws://host:port/ws."""
+        self._url = f"ws://{host}:{port}/ws"
+        self._callback: Callable[[dict], Awaitable[None]] | None = None
+
+    def set_callback(self, fn: Callable[[dict], Awaitable[None]]) -> None:
+        """Register async callback invoked with changed-field dict on every push."""
+        self._callback = fn
+
+    async def run(self) -> None:
+        """Run the reconnect loop — wrap this in an asyncio.Task."""
+        while True:
+            try:
+                async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                    async with session.ws_connect(self._url, heartbeat=30) as ws:
+                        _LOG.debug("MPC-HC bridge WebSocket connected: %s", self._url)
+                        async for msg in ws:
+                            if msg.type == aiohttp.WSMsgType.TEXT and self._callback:
+                                try:
+                                    await self._callback(json.loads(msg.data))
+                                except Exception as ex:  # pylint: disable=broad-exception-caught
+                                    _LOG.debug("MPC-HC WS callback error: %s", ex)
+                            elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                                break
+            except asyncio.CancelledError:
+                return
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge WS disconnected (%s), retry in 5 s", ex)
+            await asyncio.sleep(5)

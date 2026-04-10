@@ -57,6 +57,7 @@ from mpchc import (
     MPCHC_COMMANDS,
     STATE_PAUSED,
     STATE_PLAYING,
+    MpcHcBridgeWs,
     MpcHcClient,
     MpcHcVariables,
 )
@@ -360,9 +361,14 @@ class KodiDevice(IKodiDevice):
         self._media_browser = media_browser.MediaBrowser(self)
         self._mpchc: MpcHcClient | None = None
         self._mpchc_poll_task: Task | None = None
+        self._mpchc_ws: MpcHcBridgeWs | None = None
+        self._mpchc_ws_task: Task | None = None
         self._mpchc_audio_track: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(device_config.mpchc_host, device_config.mpchc_port)
+            if device_config.mpchc_bridge_port > 0:
+                self._mpchc_ws = MpcHcBridgeWs(device_config.mpchc_host, device_config.mpchc_bridge_port)
+                self._mpchc_ws.set_callback(self._on_mpchc_push)
 
     async def init_connection(self):
         """Initialize connection to device."""
@@ -593,6 +599,9 @@ class KodiDevice(IKodiDevice):
         if self._mpchc_poll_task is not None:
             self._mpchc_poll_task.cancel()
             self._mpchc_poll_task = None
+        if self._mpchc_ws_task is not None:
+            self._mpchc_ws_task.cancel()
+            self._mpchc_ws_task = None
         if self._mpchc is not None:
             await self._mpchc.close()
 
@@ -700,8 +709,11 @@ class KodiDevice(IKodiDevice):
                 self._websocket_task = self.event_loop.create_task(self.start_watchdog())
             if self._connection_status and not self._connection_status.done():
                 self._connection_status.set_result(True)
-            if self._mpchc is not None and self._mpchc_poll_task is None:
-                self._mpchc_poll_task = self.event_loop.create_task(self._start_mpchc_poll_task())
+            if self._mpchc is not None:
+                if self._mpchc_ws is not None and self._mpchc_ws_task is None:
+                    self._mpchc_ws_task = self.event_loop.create_task(self._mpchc_ws.run())
+                elif self._mpchc_ws is None and self._mpchc_poll_task is None:
+                    self._mpchc_poll_task = self.event_loop.create_task(self._start_mpchc_poll_task())
             if self._device_config.media_update_task and self._update_position_task is None:
                 self._update_position_task = self.event_loop.create_task(self.start_update_position_task())
             elif not self._device_config.media_update_task and self._update_position_task is not None:
@@ -894,6 +906,41 @@ class KodiDevice(IKodiDevice):
             return ucapi.StatusCodes.BAD_REQUEST
         ok = await self._mpchc.send_command(cmd_id)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
+
+    async def _on_mpchc_push(self, data: dict) -> None:
+        """Handle a pushed state-diff from mpchc-bridge WebSocket."""
+        updated: dict = {}
+        if "state_id" in data:
+            sid = data["state_id"]
+            _state = {2: MediaStates.PLAYING, 1: MediaStates.PAUSED}.get(sid, MediaStates.ON)
+            if self._attr_state != _state:
+                self._attr_state = _state
+                updated[MediaAttr.STATE] = _state
+        if "position_ms" in data:
+            pos = data["position_ms"] // 1000
+            if self._media_position != pos or self._media_position_updated_at is None:
+                self._media_position = pos
+                updated[MediaAttr.MEDIA_POSITION] = pos
+                self._media_position_updated_at = datetime.datetime.now(datetime.timezone.utc)
+                updated["media_position_updated_at"] = self.media_position_updated_at
+        if "duration_ms" in data:
+            dur = data["duration_ms"] // 1000
+            if self._media_duration != dur:
+                self._media_duration = dur
+                updated[MediaAttr.MEDIA_DURATION] = dur
+        if "volume" in data and self._volume != data["volume"]:
+            self._volume = data["volume"]
+            updated[MediaAttr.VOLUME] = data["volume"]
+        if "muted" in data:
+            _muted = bool(data["muted"])
+            if self._is_volume_muted != _muted:
+                self._is_volume_muted = _muted
+                updated[MediaAttr.MUTED] = _muted
+        if data.get("audio_track") and self._mpchc_audio_track != data["audio_track"]:
+            self._mpchc_audio_track = data["audio_track"]
+            updated[MediaAttr.SOUND_MODE] = data["audio_track"]
+        if updated:
+            self.events.emit(Events.UPDATE, self.id, updated)
 
     @debounce(2)
     async def update_chapter_task(self):
