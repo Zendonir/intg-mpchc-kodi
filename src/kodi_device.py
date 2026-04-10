@@ -971,6 +971,8 @@ class KodiDevice(IKodiDevice):
                 updated[MediaAttr.MEDIA_POSITION] = pos
                 self._media_position_updated_at = datetime.datetime.now(datetime.timezone.utc)
                 updated["media_position_updated_at"] = self.media_position_updated_at
+                if self._mpchc_tracks and self._mpchc_tracks.get("chapters"):
+                    updated[KodiSensors.SENSOR_CHAPTER] = self.current_chapter or ""
         if "duration_ms" in data:
             dur = data["duration_ms"] // 1000
             if self._media_duration != dur:
@@ -1937,6 +1939,10 @@ class KodiDevice(IKodiDevice):
     @property
     def chapters(self) -> list[str]:
         """Return chapters names."""
+        if self._mpchc is not None:
+            if not self._mpchc_tracks:
+                return []
+            return [ch["name"] for ch in self._mpchc_tracks.get("chapters", [])]
         if self._chapters is None:
             return []
         return [_get_chapter_name(x) for x in self._chapters]
@@ -1944,6 +1950,17 @@ class KodiDevice(IKodiDevice):
     @property
     def current_chapter(self) -> str | None:
         """Current chapter title."""
+        if self._mpchc is not None:
+            chs = self._mpchc_tracks.get("chapters", []) if self._mpchc_tracks else []
+            if not chs:
+                return None
+            pos_ms = (self.current_media_position or 0) * 1000
+            found = chs[0]
+            for ch in chs:
+                if pos_ms < ch["time_ms"]:
+                    break
+                found = ch
+            return found["name"]
         if self._chapters is None or len(self._chapters) == 0:
             return None
         position = self.current_media_position
@@ -1957,6 +1974,12 @@ class KodiDevice(IKodiDevice):
     @property
     def video_info(self) -> str:
         """Video information."""
+        if self._mpchc is not None:
+            video = self._mpchc_tracks.get("video", []) if self._mpchc_tracks else []
+            if video:
+                v = video[0]
+                return v.get("label", f"{v.get('width', 0)}x{v.get('height', 0)} {v.get('codec', '')}")
+            return ""
         video_stream: dict[str, Any] | None = self._properties.get("currentvideostream", None)
         if video_stream is None:
             return ""
@@ -2180,6 +2203,13 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_chapter(self, chapter_name: str):
         """Skip to given chapter name."""
+        if self._mpchc is not None:
+            chs = self._mpchc_tracks.get("chapters", []) if self._mpchc_tracks else []
+            for ch in chs:
+                if ch["name"] == chapter_name:
+                    await self._mpchc.seek(ch["time_ms"])
+                    return ucapi.StatusCodes.OK
+            return ucapi.StatusCodes.NOT_FOUND
         if self._no_active_players or self._chapters is None:
             return
         for chapter in self._chapters:
