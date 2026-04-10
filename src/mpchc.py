@@ -117,6 +117,26 @@ class MpcHcClient:
         cmd_id = MPCHC_COMMANDS.get(name)
         return await self.send_command(cmd_id) if cmd_id is not None else False
 
+    async def skip(self, offset_ms: int) -> bool:
+        """Seek relative to current position by offset_ms milliseconds."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(
+                    f"{self._bridge}/skip", params={"offset_ms": offset_ms}
+                ) as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge skip failed: %s", ex)
+                return False
+        # No bridge: read position first, then seek absolute
+        vars_ = await self.get_variables()
+        if vars_ is None:
+            return False
+        target_ms = max(0, vars_.position + offset_ms)
+        if vars_.duration > 0:
+            target_ms = min(target_ms, vars_.duration)
+        return await self.seek(target_ms)
+
     async def seek(self, pos_ms: int) -> bool:
         """Seek to absolute position in milliseconds."""
         if self._bridge:

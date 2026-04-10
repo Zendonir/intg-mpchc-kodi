@@ -901,6 +901,13 @@ class KodiDevice(IKodiDevice):
             else:
                 await asyncio.sleep(60)
 
+    async def mpchc_skip(self, offset_ms: int) -> ucapi.StatusCodes:
+        """Relative seek by offset_ms milliseconds via MPC-HC bridge."""
+        if self._mpchc is None:
+            return ucapi.StatusCodes.NOT_IMPLEMENTED
+        ok = await self._mpchc.skip(offset_ms)
+        return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
+
     async def mpchc_send_named(self, name: str) -> ucapi.StatusCodes:
         """Send a named MPC-HC WM_COMMAND. Returns NOT_IMPLEMENTED if MPC-HC is not configured."""
         if self._mpchc is None:

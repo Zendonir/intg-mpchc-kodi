@@ -175,6 +175,12 @@ class KodiMediaPlayer(KodiEntity, MediaPlayer):
         command_key = arguments[0].lower()
         if command_key in MPCHC_COMMANDS:
             return await device.mpchc_send_named(command_key)
+        if command_key == "mpchc_skip" and len(arguments) == 2:
+            try:
+                offset_ms = int(float(arguments[1]) * 1000)
+            except ValueError:
+                return StatusCodes.BAD_REQUEST
+            return await device.mpchc_skip(offset_ms)
         if command_key == "activatewindow" and len(arguments) == 2:
             arguments = {"window": arguments[1]}
             _LOG.debug("[%s] Custom command GUI.ActivateWindow %s", device.device_config.address, arguments)
