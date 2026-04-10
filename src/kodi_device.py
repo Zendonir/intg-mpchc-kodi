@@ -1871,6 +1871,11 @@ class KodiDevice(IKodiDevice):
         return self.sensor_subtitle_stream
 
     @property
+    def mpchc_active(self) -> bool:
+        """True when MPC-HC is configured and should be used for playback control."""
+        return self._mpchc is not None
+
+    @property
     def mpchc_audio_track_labels(self) -> list[str]:
         """List of audio track labels from MPC-HC for use as selector options."""
         if self._mpchc_tracks:
