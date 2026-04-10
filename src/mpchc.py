@@ -161,6 +161,28 @@ class MpcHcClient:
         cmd_id = MPCHC_COMMANDS.get(name)
         return await self.send_command(cmd_id) if cmd_id is not None else False
 
+    async def select_audio(self, pos: int) -> bool:
+        """Select audio track by 0-based position (cycles via bridge)."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(f"{self._bridge}/audio/select/{pos}") as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge audio select failed: %s", ex)
+                return False
+        return False  # no direct API for track selection without bridge
+
+    async def select_subtitle(self, pos: int) -> bool:
+        """Select subtitle track by 0-based position (cycles via bridge)."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(f"{self._bridge}/subtitle/select/{pos}") as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge subtitle select failed: %s", ex)
+                return False
+        return False
+
     async def skip(self, offset_ms: int) -> bool:
         """Seek relative to current position by offset_ms milliseconds."""
         if self._bridge:

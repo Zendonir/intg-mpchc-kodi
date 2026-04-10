@@ -901,6 +901,20 @@ class KodiDevice(IKodiDevice):
             else:
                 await asyncio.sleep(60)
 
+    async def mpchc_audio_select(self, pos: int) -> ucapi.StatusCodes:
+        """Select audio track by 0-based position via MPC-HC bridge."""
+        if self._mpchc is None:
+            return ucapi.StatusCodes.NOT_IMPLEMENTED
+        ok = await self._mpchc.select_audio(pos)
+        return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
+
+    async def mpchc_subtitle_select(self, pos: int) -> ucapi.StatusCodes:
+        """Select subtitle track by 0-based position via MPC-HC bridge."""
+        if self._mpchc is None:
+            return ucapi.StatusCodes.NOT_IMPLEMENTED
+        ok = await self._mpchc.select_subtitle(pos)
+        return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
+
     async def mpchc_skip(self, offset_ms: int) -> ucapi.StatusCodes:
         """Relative seek by offset_ms milliseconds via MPC-HC bridge."""
         if self._mpchc is None:
