@@ -85,7 +85,7 @@ class MpcHcClient:
     def __init__(self, host: str, port: int = 13579, bridge_port: int = 0):
         """Create MPC-HC client. bridge_port > 0 routes commands through the bridge."""
         self._base = f"http://{host}:{port}"
-        self._bridge_cmd_base = f"http://{host}:{bridge_port}/command" if bridge_port > 0 else None
+        self._bridge = f"http://{host}:{bridge_port}" if bridge_port > 0 else None
         self._session: aiohttp.ClientSession | None = None
 
     def _get_session(self) -> aiohttp.ClientSession:
@@ -106,19 +106,59 @@ class MpcHcClient:
             return None
 
     async def send_named_command(self, name: str) -> bool:
-        """Send a named command via the bridge (POST /command/{name}).
+        """Send a named command via the bridge (POST /command/{name}) or direct MPC-HC HTTP."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(f"{self._bridge}/command/{name}") as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge command '%s' failed: %s", name, ex)
+                return False
+        cmd_id = MPCHC_COMMANDS.get(name)
+        return await self.send_command(cmd_id) if cmd_id is not None else False
 
-        Uses PostMessageW on the Windows side — preferred over send_command() when
-        the bridge is configured. Falls back to send_command() if bridge not set.
-        """
-        if self._bridge_cmd_base is None:
-            cmd_id = MPCHC_COMMANDS.get(name)
-            return await self.send_command(cmd_id) if cmd_id is not None else False
+    async def seek(self, pos_ms: int) -> bool:
+        """Seek to absolute position in milliseconds."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(
+                    f"{self._bridge}/seek", params={"pos_ms": pos_ms}
+                ) as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge seek failed: %s", ex)
+                return False
         try:
-            async with self._get_session().post(f"{self._bridge_cmd_base}/{name}") as resp:
-                return resp.status == 200
+            async with self._get_session().get(
+                f"{self._base}/command.html",
+                params={"wm_command": -1, "position": f"{pos_ms / 1000:.3f}"},
+                allow_redirects=False,
+            ) as resp:
+                return resp.status in (200, 302)
         except Exception as ex:  # pylint: disable=broad-exception-caught
-            _LOG.debug("MPC-HC bridge command '%s' failed: %s", name, ex)
+            _LOG.debug("MPC-HC seek failed: %s", ex)
+            return False
+
+    async def set_volume(self, level: int) -> bool:
+        """Set volume 0-100."""
+        if self._bridge:
+            try:
+                async with self._get_session().post(
+                    f"{self._bridge}/volume", params={"level": level}
+                ) as resp:
+                    return resp.status == 200
+            except Exception as ex:  # pylint: disable=broad-exception-caught
+                _LOG.debug("MPC-HC bridge volume set failed: %s", ex)
+                return False
+        try:
+            async with self._get_session().get(
+                f"{self._base}/command.html",
+                params={"wm_command": -2, "volume": level},
+                allow_redirects=False,
+            ) as resp:
+                return resp.status in (200, 302)
+        except Exception as ex:  # pylint: disable=broad-exception-caught
+            _LOG.debug("MPC-HC volume set failed: %s", ex)
             return False
 
     async def send_command(self, wm_command: int) -> bool:

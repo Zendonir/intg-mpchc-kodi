@@ -1924,23 +1924,37 @@ class KodiDevice(IKodiDevice):
         """Set volume level, range 0..100."""
         if volume is None:
             return ucapi.StatusCodes.BAD_REQUEST
+        if self._mpchc is not None:
+            await self._mpchc.set_volume(int(volume))
+            return ucapi.StatusCodes.OK
         _LOG.debug("[%s] Kodi setting volume to %s", self.device_config.address, volume)
         await self._kodi.set_volume_level(int(volume))
         return ucapi.StatusCodes.OK
 
     @retry()
     async def volume_up(self):
-        """Send volume-up command to Kodi."""
+        """Send volume-up command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("vol_up")
+            return ucapi.StatusCodes.OK
         await self._kodi.volume_up()
 
     @retry()
     async def volume_down(self):
-        """Send volume-down command to Kodi."""
+        """Send volume-down command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("vol_down")
+            return ucapi.StatusCodes.OK
         await self._kodi.volume_down()
 
     @retry()
     async def mute(self, muted: bool):
-        """Send mute command to Kodi."""
+        """Send mute command."""
+        if self._mpchc is not None:
+            # MPC-HC only has a toggle — only send if the desired state differs
+            if muted != self._is_volume_muted:
+                await self._mpchc.send_named_command("mute")
+            return ucapi.StatusCodes.OK
         _LOG.debug("[%s] Sending mute: %s", self.device_config.address, muted)
         await self._kodi.mute(muted)
 
@@ -1954,7 +1968,10 @@ class KodiDevice(IKodiDevice):
 
     @retry()
     async def play_pause(self):
-        """Send toggle-play-pause command to Kodi."""
+        """Send toggle-play-pause command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("play_pause")
+            return ucapi.StatusCodes.OK
         self._position_timestamp = None
         try:
             self._players = await self._kodi.get_players()
@@ -1969,18 +1986,27 @@ class KodiDevice(IKodiDevice):
 
     @retry()
     async def stop(self):
-        """Send stop command to Kodi."""
+        """Send stop command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("stop")
+            return ucapi.StatusCodes.OK
         await self._kodi.stop()
 
     @retry()
     async def next(self):
-        """Send next-track command to Kodi."""
+        """Send next-track command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("next")
+            return ucapi.StatusCodes.OK
         await self._kodi.next_track()
         await self.update_chapter_task()
 
     @retry()
     async def previous(self):
-        """Send previous-track command to Kodi."""
+        """Send previous-track command."""
+        if self._mpchc is not None:
+            await self._mpchc.send_named_command("prev")
+            return ucapi.StatusCodes.OK
         await self._kodi.previous_track()
         await self.update_chapter_task()
 
@@ -2049,7 +2075,12 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def seek(self, media_position: int):
         """Seek to given position in seconds."""
-        if self._no_active_players or media_position is None:
+        if media_position is None:
+            return
+        if self._mpchc is not None:
+            await self._mpchc.seek(media_position * 1000)
+            return ucapi.StatusCodes.OK
+        if self._no_active_players:
             return
         m, s = divmod(media_position, 60)
         h, m = divmod(m, 60)
@@ -2078,6 +2109,10 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_audio_track(self, track_name: str):
         """Skip to given audio track name."""
+        if self._mpchc is not None:
+            # MPC-HC doesn't expose a track list — cycle to next track
+            await self._mpchc.send_named_command("audio_next")
+            return ucapi.StatusCodes.OK
         if self._no_active_players:
             return
         for track in self.audio_tracks:
