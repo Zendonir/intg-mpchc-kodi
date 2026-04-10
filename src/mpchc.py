@@ -187,9 +187,7 @@ class MpcHcClient:
         """Seek relative to current position by offset_ms milliseconds."""
         if self._bridge:
             try:
-                async with self._get_session().post(
-                    f"{self._bridge}/skip", params={"offset_ms": offset_ms}
-                ) as resp:
+                async with self._get_session().post(f"{self._bridge}/skip", params={"offset_ms": offset_ms}) as resp:
                     return resp.status == 200
             except Exception as ex:  # pylint: disable=broad-exception-caught
                 _LOG.debug("MPC-HC bridge skip failed: %s", ex)
