@@ -367,6 +367,7 @@ class KodiDevice(IKodiDevice):
         self._mpchc_subtitle_track: str = ""
         self._mpchc_tracks: dict | None = None
         self._mpchc_tracks_loading: bool = False
+        self._mpchc_tracks_last_attempt: float = 0.0
         self._mpchc_filepath: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(
@@ -720,6 +721,7 @@ class KodiDevice(IKodiDevice):
             if self._mpchc is not None:
                 if self._mpchc_ws is not None and self._mpchc_ws_task is None:
                     self._mpchc_ws_task = self.event_loop.create_task(self._mpchc_ws.run())
+                    asyncio.create_task(self._mpchc_fetch_tracks())
                 elif self._mpchc_ws is None and self._mpchc_poll_task is None:
                     self._mpchc_poll_task = self.event_loop.create_task(self._start_mpchc_poll_task())
             if self._device_config.media_update_task and self._update_position_task is None:
@@ -903,6 +905,7 @@ class KodiDevice(IKodiDevice):
                 self._mpchc_filepath = vars_.filepath
                 self._mpchc_tracks = None
                 self._mpchc_tracks_loading = False
+                self._mpchc_tracks_last_attempt = 0.0
                 asyncio.create_task(self._mpchc_fetch_tracks())
 
             if updated_data:
@@ -949,6 +952,7 @@ class KodiDevice(IKodiDevice):
         if self._mpchc is None or self._mpchc_tracks_loading:
             return
         self._mpchc_tracks_loading = True
+        self._mpchc_tracks_last_attempt = time.monotonic()
         tracks = await self._mpchc.get_tracks()
         self._mpchc_tracks_loading = False
         if tracks:
@@ -1023,11 +1027,13 @@ class KodiDevice(IKodiDevice):
             self._mpchc_filepath = data["filepath"]
             self._mpchc_tracks = None
             self._mpchc_tracks_loading = False
+            self._mpchc_tracks_last_attempt = 0.0
             if data["filepath"]:
                 asyncio.create_task(self._mpchc_fetch_tracks())
-        elif self._mpchc_tracks is None and not self._mpchc_tracks_loading and data.get("audio_track"):
-            # Tracks not yet fetched (bridge without filepath push): trigger on first audio info
-            asyncio.create_task(self._mpchc_fetch_tracks())
+        elif self._mpchc_tracks is None and not self._mpchc_tracks_loading:
+            # Tracks not yet fetched: retry at most once per 10 s until a file is loaded
+            if time.monotonic() - self._mpchc_tracks_last_attempt >= 10.0:
+                asyncio.create_task(self._mpchc_fetch_tracks())
         if updated:
             self.events.emit(Events.UPDATE, self.id, updated)
 
