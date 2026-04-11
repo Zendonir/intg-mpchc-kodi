@@ -73,7 +73,7 @@ class KodiSelect(KodiEntity, Select):
             if self.SELECT_NAME in update:
                 return update[self.SELECT_NAME]
             return None
-        return self.attributes
+        return self.all_attributes
 
     async def command(self, cmd_id: str, params: dict[str, Any] | None = None, *, websocket: Any) -> StatusCodes:
         """Process selector command."""

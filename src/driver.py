@@ -145,6 +145,8 @@ async def on_subscribe_entities(entity_ids: list[str]) -> None:
                 api.configured_entities.update_attributes(entity_id, entity.update_attributes())
             elif isinstance(entity, selector.KodiSelect):
                 api.configured_entities.update_attributes(entity_id, entity.update_attributes())
+                if device.mpchc_active:
+                    device.mpchc_refresh_tracks()
             continue
 
         device = config.devices.get(device_id)

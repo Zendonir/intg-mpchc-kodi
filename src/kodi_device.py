@@ -947,6 +947,10 @@ class KodiDevice(IKodiDevice):
         ok = await self._mpchc.send_named_command(name)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
+    def mpchc_refresh_tracks(self) -> None:
+        """Schedule a background track fetch if MPC-HC is active and tracks are not loading."""
+        asyncio.create_task(self._mpchc_fetch_tracks())
+
     async def _mpchc_fetch_tracks(self) -> None:
         """Fetch and cache audio/subtitle track list from bridge /tracks endpoint."""
         if self._mpchc is None or self._mpchc_tracks_loading:

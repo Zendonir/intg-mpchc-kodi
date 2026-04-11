@@ -89,7 +89,7 @@ class KodiSensor(KodiEntity, Sensor):
             if self.SENSOR_NAME in update:
                 attributes[Attributes.VALUE] = update[self.SENSOR_NAME]
             return attributes
-        return self.attributes
+        return self.all_attributes
 
 
 class KodiAudioStream(KodiSensor):
