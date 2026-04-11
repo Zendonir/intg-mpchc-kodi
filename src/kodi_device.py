@@ -366,6 +366,7 @@ class KodiDevice(IKodiDevice):
         self._mpchc_audio_track: str = ""
         self._mpchc_subtitle_track: str = ""
         self._mpchc_tracks: dict | None = None
+        self._mpchc_tracks_loading: bool = False
         self._mpchc_filepath: str = ""
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(
@@ -900,6 +901,8 @@ class KodiDevice(IKodiDevice):
                 updated_data[KodiSensors.SENSOR_SUBTITLE_STREAM] = vars_.subtitle_track
             if vars_.filepath and self._mpchc_filepath != vars_.filepath:
                 self._mpchc_filepath = vars_.filepath
+                self._mpchc_tracks = None
+                self._mpchc_tracks_loading = False
                 asyncio.create_task(self._mpchc_fetch_tracks())
 
             if updated_data:
@@ -943,16 +946,39 @@ class KodiDevice(IKodiDevice):
 
     async def _mpchc_fetch_tracks(self) -> None:
         """Fetch and cache audio/subtitle track list from bridge /tracks endpoint."""
-        if self._mpchc is None:
+        if self._mpchc is None or self._mpchc_tracks_loading:
             return
+        self._mpchc_tracks_loading = True
         tracks = await self._mpchc.get_tracks()
+        self._mpchc_tracks_loading = False
         if tracks:
             self._mpchc_tracks = tracks
             _LOG.debug(
-                "[%s] MPC-HC tracks: %d audio, %d subtitle",
+                "[%s] MPC-HC tracks: %d audio, %d subtitle, %d chapters",
                 self.device_config.address,
                 len(tracks.get("audio", [])),
                 len(tracks.get("subtitle", [])),
+                len(tracks.get("chapters", [])),
+            )
+            self.events.emit(
+                Events.UPDATE,
+                self.id,
+                {
+                    KodiSelects.SELECT_AUDIO_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+                    },
+                    KodiSelects.SELECT_SUBTITLE_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+                    },
+                    KodiSelects.SELECT_CHAPTER: {
+                        SelectAttributes.CURRENT_OPTION: self.current_chapter or "",
+                        SelectAttributes.OPTIONS: self.chapters,
+                    },
+                    KodiSensors.SENSOR_VIDEO_INFO: self.video_info,
+                    KodiSensors.SENSOR_CHAPTER: self.current_chapter or "",
+                },
             )
 
     async def _on_mpchc_push(self, data: dict) -> None:
@@ -993,6 +1019,15 @@ class KodiDevice(IKodiDevice):
         if "subtitle_track" in data and self._mpchc_subtitle_track != data.get("subtitle_track", ""):
             self._mpchc_subtitle_track = data.get("subtitle_track", "")
             updated[KodiSensors.SENSOR_SUBTITLE_STREAM] = self._mpchc_subtitle_track
+        if "filepath" in data and self._mpchc_filepath != data["filepath"]:
+            self._mpchc_filepath = data["filepath"]
+            self._mpchc_tracks = None
+            self._mpchc_tracks_loading = False
+            if data["filepath"]:
+                asyncio.create_task(self._mpchc_fetch_tracks())
+        elif self._mpchc_tracks is None and not self._mpchc_tracks_loading and data.get("audio_track"):
+            # Tracks not yet fetched (bridge without filepath push): trigger on first audio info
+            asyncio.create_task(self._mpchc_fetch_tracks())
         if updated:
             self.events.emit(Events.UPDATE, self.id, updated)
 
