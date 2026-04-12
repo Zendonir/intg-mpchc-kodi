@@ -923,6 +923,20 @@ class KodiDevice(IKodiDevice):
         """Select audio track by 0-based position via MPC-HC bridge."""
         if self._mpchc is None:
             return ucapi.StatusCodes.NOT_IMPLEMENTED
+        # Optimistic update: show selection immediately; bridge will confirm via WS
+        if self._mpchc_tracks:
+            for t in self._mpchc_tracks.get("audio", []):
+                t["selected"] = t.get("pos") == pos
+            self.events.emit(
+                Events.UPDATE,
+                self.id,
+                {
+                    KodiSelects.SELECT_AUDIO_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+                    }
+                },
+            )
         ok = await self._mpchc.select_audio(pos)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
@@ -930,6 +944,20 @@ class KodiDevice(IKodiDevice):
         """Select subtitle track by 0-based position via MPC-HC bridge."""
         if self._mpchc is None:
             return ucapi.StatusCodes.NOT_IMPLEMENTED
+        # Optimistic update: show selection immediately; bridge will confirm via WS
+        if self._mpchc_tracks:
+            for t in self._mpchc_tracks.get("subtitle", []):
+                t["selected"] = t.get("pos") == pos
+            self.events.emit(
+                Events.UPDATE,
+                self.id,
+                {
+                    KodiSelects.SELECT_SUBTITLE_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+                    }
+                },
+            )
         ok = await self._mpchc.select_subtitle(pos)
         return ucapi.StatusCodes.OK if ok else ucapi.StatusCodes.SERVICE_UNAVAILABLE
 
