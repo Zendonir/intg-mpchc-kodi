@@ -1015,24 +1015,40 @@ class KodiDevice(IKodiDevice):
         if "volume" in data and self._volume != data["volume"]:
             self._volume = data["volume"]
             updated[MediaAttr.VOLUME] = data["volume"]
+            updated[KodiSensors.SENSOR_VOLUME] = data["volume"]
         if "muted" in data:
             _muted = bool(data["muted"])
             if self._is_volume_muted != _muted:
                 self._is_volume_muted = _muted
                 updated[MediaAttr.MUTED] = _muted
+                updated[KodiSensors.SENSOR_VOLUME_MUTED] = _muted
         if data.get("audio_track") and self._mpchc_audio_track != data["audio_track"]:
             self._mpchc_audio_track = data["audio_track"]
             updated[MediaAttr.SOUND_MODE] = data["audio_track"]
             updated[KodiSensors.SENSOR_AUDIO_STREAM] = data["audio_track"]
+            updated[KodiSensors.SENSOR_AUDIO_INFO] = data["audio_track"]
+            if not self._mpchc_tracks:
+                updated[KodiSelects.SELECT_AUDIO_STREAM] = {
+                    SelectAttributes.CURRENT_OPTION: data["audio_track"],
+                    SelectAttributes.OPTIONS: [data["audio_track"]],
+                }
         if "subtitle_track" in data and self._mpchc_subtitle_track != data.get("subtitle_track", ""):
             self._mpchc_subtitle_track = data.get("subtitle_track", "")
             updated[KodiSensors.SENSOR_SUBTITLE_STREAM] = self._mpchc_subtitle_track
+            if not self._mpchc_tracks:
+                updated[KodiSelects.SELECT_SUBTITLE_STREAM] = {
+                    SelectAttributes.CURRENT_OPTION: self._mpchc_subtitle_track,
+                    SelectAttributes.OPTIONS: [self._mpchc_subtitle_track] if self._mpchc_subtitle_track else [],
+                }
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
             self._mpchc_filepath = data["filepath"]
-            if not data["filepath"]:
-                self._mpchc_tracks = None
+            self._mpchc_tracks = None
+            self._mpchc_tracks_loading = False
+            self._mpchc_tracks_last_attempt = 0.0
+            if data["filepath"]:
+                asyncio.create_task(self._mpchc_fetch_tracks())
         if "tracks" in data and data["tracks"]:
-            # Bridge sends full track data in the WS push — use it directly
+            # Bridge v1.6.9+: full track data arrives in the WS push — use directly
             self._mpchc_tracks = data["tracks"]
             self._mpchc_tracks_loading = False
             updated[KodiSelects.SELECT_AUDIO_STREAM] = {
@@ -1050,7 +1066,7 @@ class KodiDevice(IKodiDevice):
             updated[KodiSensors.SENSOR_VIDEO_INFO] = self.video_info
             updated[KodiSensors.SENSOR_CHAPTER] = self.current_chapter or ""
         elif self._mpchc_tracks is None and not self._mpchc_tracks_loading:
-            # Fallback: fetch via HTTP if bridge doesn't push tracks (older bridge version)
+            # Fallback: fetch via HTTP if bridge doesn't push tracks (older bridge)
             if time.monotonic() - self._mpchc_tracks_last_attempt >= 10.0:
                 asyncio.create_task(self._mpchc_fetch_tracks())
         if updated:
