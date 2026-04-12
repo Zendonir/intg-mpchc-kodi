@@ -370,6 +370,7 @@ def _register_available_entities(device_config: config.KodiConfigDevice, device:
         sensor.KodiAudioInfo(device_config, device),
         sensor.KodiSensorVolume(device_config, device),
         sensor.KodiSensorMuted(device_config, device),
+        sensor.KodiSensorPlayStatus(device_config, device),
     ]
 
     for entity in entities:

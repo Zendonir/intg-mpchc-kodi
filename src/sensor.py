@@ -62,7 +62,7 @@ class KodiSensor(KodiEntity, Sensor):
     @property
     def state(self) -> States:
         """Return sensor state."""
-        raise self._state
+        return self._state
 
     @property
     def sensor_value(self) -> str:
@@ -274,3 +274,28 @@ class KodiSensorMuted(KodiSensor):
     def sensor_value(self) -> str | float:
         """Return sensor value."""
         return "on" if self._device.is_volume_muted else "off"
+
+
+class KodiSensorPlayStatus(KodiSensor):
+    """Play status sensor entity: playing / paused / stopped."""
+
+    ENTITY_NAME = "sensor_play_status"
+    SENSOR_NAME = KodiSensors.SENSOR_PLAY_STATUS
+
+    def __init__(self, config_device: KodiConfigDevice, device: kodi_device.KodiDevice):
+        """Initialize the class."""
+        entity_id = f"{create_entity_id(config_device.id, EntityTypes.SENSOR)}.{self.ENTITY_NAME}"
+        super().__init__(
+            entity_id,
+            {
+                "en": f"{config_device.get_device_part()}Play status",
+                "de": f"{config_device.get_device_part()}Wiedergabe Status",
+            },
+            config_device,
+            device,
+        )
+
+    @property
+    def sensor_value(self) -> str:
+        """Return sensor value."""
+        return self._device.sensor_play_status

@@ -94,6 +94,7 @@ class KodiSensors(str, Enum):
     SENSOR_AUDIO_INFO = "sensor_audio_info"
     SENSOR_VOLUME = "sensor_volume"
     SENSOR_VOLUME_MUTED = "sensor_volume_muted"
+    SENSOR_PLAY_STATUS = "sensor_play_status"
 
 
 class KodiSelects(str, Enum):

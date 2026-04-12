@@ -998,6 +998,7 @@ class KodiDevice(IKodiDevice):
             if self._attr_state != _state:
                 self._attr_state = _state
                 updated[MediaAttr.STATE] = _state
+                updated[KodiSensors.SENSOR_PLAY_STATUS] = self.sensor_play_status
         if "position_ms" in data:
             pos = data["position_ms"] // 1000
             if self._media_position != pos or self._media_position_updated_at is None:
@@ -1882,6 +1883,16 @@ class KodiDevice(IKodiDevice):
             if track.index == current_audio_stream.get("index", 0):
                 return track
         return None
+
+    @property
+    def sensor_play_status(self) -> str:
+        """Return play status: playing / paused / stopped."""
+        _st = self._attr_state if self._mpchc is not None else self.state
+        if _st == MediaStates.PLAYING:
+            return "playing"
+        if _st == MediaStates.PAUSED:
+            return "paused"
+        return "stopped"
 
     @property
     def sensor_audio_stream(self) -> str:
