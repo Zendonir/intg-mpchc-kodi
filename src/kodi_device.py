@@ -1705,18 +1705,24 @@ class KodiDevice(IKodiDevice):
             KodiSelects.SELECT_SUBTITLE_STREAM: {
                 SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
                 SelectAttributes.OPTIONS: (
-                    self.mpchc_subtitle_track_labels if self._mpchc is not None else
-                    [x.get_track_name(KodiStreamConfig(self._device_config.sensor_subtitle_stream_config))
-                     for x in self.subtitle_tracks]
+                    self.mpchc_subtitle_track_labels
+                    if self._mpchc is not None
+                    else [
+                        x.get_track_name(KodiStreamConfig(self._device_config.sensor_subtitle_stream_config))
+                        for x in self.subtitle_tracks
+                    ]
                 ),
                 SelectAttributes.STATE: SelectStates.ON,
             },
             KodiSelects.SELECT_AUDIO_STREAM: {
                 SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
                 SelectAttributes.OPTIONS: (
-                    self.mpchc_audio_track_labels if self._mpchc is not None else
-                    [x.get_track_name(KodiStreamConfig(self._device_config.sensor_audio_stream_config))
-                     for x in self.audio_tracks]
+                    self.mpchc_audio_track_labels
+                    if self._mpchc is not None
+                    else [
+                        x.get_track_name(KodiStreamConfig(self._device_config.sensor_audio_stream_config))
+                        for x in self.audio_tracks
+                    ]
                 ),
                 SelectAttributes.STATE: SelectStates.ON,
             },
