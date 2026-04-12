@@ -1052,12 +1052,16 @@ class KodiDevice(IKodiDevice):
 
             async def _emit_audio_sel(p=pos):
                 await asyncio.sleep(1.5)
-                self.events.emit(Events.UPDATE, self.id, {
-                    KodiSelects.SELECT_AUDIO_STREAM: {
-                        SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
-                        SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
-                    }
-                })
+                self.events.emit(
+                    Events.UPDATE,
+                    self.id,
+                    {
+                        KodiSelects.SELECT_AUDIO_STREAM: {
+                            SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                            SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+                        }
+                    },
+                )
 
             self._mpchc_audio_pos_task = asyncio.create_task(_emit_audio_sel())
         if "current_sub_pos" in data and self._mpchc_tracks:
@@ -1069,12 +1073,16 @@ class KodiDevice(IKodiDevice):
 
             async def _emit_sub_sel(p=pos):
                 await asyncio.sleep(1.5)
-                self.events.emit(Events.UPDATE, self.id, {
-                    KodiSelects.SELECT_SUBTITLE_STREAM: {
-                        SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
-                        SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
-                    }
-                })
+                self.events.emit(
+                    Events.UPDATE,
+                    self.id,
+                    {
+                        KodiSelects.SELECT_SUBTITLE_STREAM: {
+                            SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                            SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+                        }
+                    },
+                )
 
             self._mpchc_sub_pos_task = asyncio.create_task(_emit_sub_sel())
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
