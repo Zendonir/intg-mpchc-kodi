@@ -369,6 +369,8 @@ class KodiDevice(IKodiDevice):
         self._mpchc_tracks_loading: bool = False
         self._mpchc_tracks_last_attempt: float = 0.0
         self._mpchc_filepath: str = ""
+        self._mpchc_audio_pos_task: Task | None = None
+        self._mpchc_sub_pos_task: Task | None = None
         if device_config.mpchc_enabled and device_config.mpchc_host:
             self._mpchc = MpcHcClient(
                 device_config.mpchc_host,
@@ -1045,18 +1047,32 @@ class KodiDevice(IKodiDevice):
             pos = data["current_audio_pos"]
             for t in self._mpchc_tracks.get("audio", []):
                 t["selected"] = t.get("pos") == pos
-            updated[KodiSelects.SELECT_AUDIO_STREAM] = {
-                SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
-                SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
-            }
+            if self._mpchc_audio_pos_task:
+                self._mpchc_audio_pos_task.cancel()
+            async def _emit_audio_sel(p=pos):
+                await asyncio.sleep(1.5)
+                self.events.emit(Events.UPDATE, self.id, {
+                    KodiSelects.SELECT_AUDIO_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+                    }
+                })
+            self._mpchc_audio_pos_task = asyncio.create_task(_emit_audio_sel())
         if "current_sub_pos" in data and self._mpchc_tracks:
             pos = data["current_sub_pos"]
             for t in self._mpchc_tracks.get("subtitle", []):
                 t["selected"] = t.get("pos") == pos
-            updated[KodiSelects.SELECT_SUBTITLE_STREAM] = {
-                SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
-                SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
-            }
+            if self._mpchc_sub_pos_task:
+                self._mpchc_sub_pos_task.cancel()
+            async def _emit_sub_sel(p=pos):
+                await asyncio.sleep(1.5)
+                self.events.emit(Events.UPDATE, self.id, {
+                    KodiSelects.SELECT_SUBTITLE_STREAM: {
+                        SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                        SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+                    }
+                })
+            self._mpchc_sub_pos_task = asyncio.create_task(_emit_sub_sel())
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
             self._mpchc_filepath = data["filepath"]
             self._mpchc_tracks = None
