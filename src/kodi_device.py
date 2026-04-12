@@ -1041,6 +1041,22 @@ class KodiDevice(IKodiDevice):
                     SelectAttributes.CURRENT_OPTION: self._mpchc_subtitle_track,
                     SelectAttributes.OPTIONS: [self._mpchc_subtitle_track] if self._mpchc_subtitle_track else [],
                 }
+        if "current_audio_pos" in data and self._mpchc_tracks:
+            pos = data["current_audio_pos"]
+            for t in self._mpchc_tracks.get("audio", []):
+                t["selected"] = t.get("pos") == pos
+            updated[KodiSelects.SELECT_AUDIO_STREAM] = {
+                SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+            }
+        if "current_sub_pos" in data and self._mpchc_tracks:
+            pos = data["current_sub_pos"]
+            for t in self._mpchc_tracks.get("subtitle", []):
+                t["selected"] = t.get("pos") == pos
+            updated[KodiSelects.SELECT_SUBTITLE_STREAM] = {
+                SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+            }
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
             self._mpchc_filepath = data["filepath"]
             self._mpchc_tracks = None
