@@ -1029,13 +1029,28 @@ class KodiDevice(IKodiDevice):
             updated[KodiSensors.SENSOR_SUBTITLE_STREAM] = self._mpchc_subtitle_track
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
             self._mpchc_filepath = data["filepath"]
-            self._mpchc_tracks = None
+            if not data["filepath"]:
+                self._mpchc_tracks = None
+        if "tracks" in data and data["tracks"]:
+            # Bridge sends full track data in the WS push — use it directly
+            self._mpchc_tracks = data["tracks"]
             self._mpchc_tracks_loading = False
-            self._mpchc_tracks_last_attempt = 0.0
-            if data["filepath"]:
-                asyncio.create_task(self._mpchc_fetch_tracks())
+            updated[KodiSelects.SELECT_AUDIO_STREAM] = {
+                SelectAttributes.CURRENT_OPTION: self.selector_audio_stream,
+                SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
+            }
+            updated[KodiSelects.SELECT_SUBTITLE_STREAM] = {
+                SelectAttributes.CURRENT_OPTION: self.selector_subtitle_stream,
+                SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
+            }
+            updated[KodiSelects.SELECT_CHAPTER] = {
+                SelectAttributes.CURRENT_OPTION: self.current_chapter or "",
+                SelectAttributes.OPTIONS: self.chapters,
+            }
+            updated[KodiSensors.SENSOR_VIDEO_INFO] = self.video_info
+            updated[KodiSensors.SENSOR_CHAPTER] = self.current_chapter or ""
         elif self._mpchc_tracks is None and not self._mpchc_tracks_loading:
-            # Tracks not yet fetched: retry at most once per 10 s until a file is loaded
+            # Fallback: fetch via HTTP if bridge doesn't push tracks (older bridge version)
             if time.monotonic() - self._mpchc_tracks_last_attempt >= 10.0:
                 asyncio.create_task(self._mpchc_fetch_tracks())
         if updated:
