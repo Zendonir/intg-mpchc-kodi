@@ -1049,6 +1049,7 @@ class KodiDevice(IKodiDevice):
                 t["selected"] = t.get("pos") == pos
             if self._mpchc_audio_pos_task:
                 self._mpchc_audio_pos_task.cancel()
+
             async def _emit_audio_sel(p=pos):
                 await asyncio.sleep(1.5)
                 self.events.emit(Events.UPDATE, self.id, {
@@ -1057,6 +1058,7 @@ class KodiDevice(IKodiDevice):
                         SelectAttributes.OPTIONS: self.mpchc_audio_track_labels,
                     }
                 })
+
             self._mpchc_audio_pos_task = asyncio.create_task(_emit_audio_sel())
         if "current_sub_pos" in data and self._mpchc_tracks:
             pos = data["current_sub_pos"]
@@ -1064,6 +1066,7 @@ class KodiDevice(IKodiDevice):
                 t["selected"] = t.get("pos") == pos
             if self._mpchc_sub_pos_task:
                 self._mpchc_sub_pos_task.cancel()
+
             async def _emit_sub_sel(p=pos):
                 await asyncio.sleep(1.5)
                 self.events.emit(Events.UPDATE, self.id, {
@@ -1072,6 +1075,7 @@ class KodiDevice(IKodiDevice):
                         SelectAttributes.OPTIONS: self.mpchc_subtitle_track_labels,
                     }
                 })
+
             self._mpchc_sub_pos_task = asyncio.create_task(_emit_sub_sel())
         if "filepath" in data and self._mpchc_filepath != data["filepath"]:
             self._mpchc_filepath = data["filepath"]
