@@ -2044,6 +2044,15 @@ class KodiDevice(IKodiDevice):
         return self._mpchc is not None
 
     @property
+    def mpchc_is_active_player(self) -> bool:
+        """True when MPC-HC has a file loaded (playing or paused).
+
+        When True, all applicable commands are routed to MPC-HC.
+        When False (MPC-HC idle/stopped), commands fall through to Kodi.
+        """
+        return self._mpchc is not None and bool(self._mpchc_filepath)
+
+    @property
     def mpchc_audio_track_labels(self) -> list[str]:
         """List of audio track labels from MPC-HC for use as selector options."""
         if self._mpchc_tracks:
@@ -2201,7 +2210,7 @@ class KodiDevice(IKodiDevice):
         """Set volume level, range 0..100."""
         if volume is None:
             return ucapi.StatusCodes.BAD_REQUEST
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.set_volume(int(volume))
             return ucapi.StatusCodes.OK
         _LOG.debug("[%s] Kodi setting volume to %s", self.device_config.address, volume)
@@ -2211,7 +2220,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def volume_up(self):
         """Send volume-up command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("vol_up")
             return ucapi.StatusCodes.OK
         await self._kodi.volume_up()
@@ -2219,7 +2228,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def volume_down(self):
         """Send volume-down command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("vol_down")
             return ucapi.StatusCodes.OK
         await self._kodi.volume_down()
@@ -2227,7 +2236,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def mute(self, muted: bool):
         """Send mute command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             # MPC-HC only has a toggle — only send if the desired state differs
             if muted != self._is_volume_muted:
                 await self._mpchc.send_named_command("mute")
@@ -2246,7 +2255,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def play_pause(self):
         """Send toggle-play-pause command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("play_pause")
             return ucapi.StatusCodes.OK
         self._position_timestamp = None
@@ -2264,7 +2273,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def stop(self):
         """Send stop command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("stop")
             return ucapi.StatusCodes.OK
         await self._kodi.stop()
@@ -2272,7 +2281,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def next(self):
         """Send next-track command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("next")
             return ucapi.StatusCodes.OK
         await self._kodi.next_track()
@@ -2281,7 +2290,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def previous(self):
         """Send previous-track command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.send_named_command("prev")
             return ucapi.StatusCodes.OK
         await self._kodi.previous_track()
@@ -2290,7 +2299,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def media_seek(self, position: float):
         """Send seek command."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.seek(int(position * 1000))
             return ucapi.StatusCodes.OK
         await self._kodi.media_seek(position)
@@ -2357,7 +2366,7 @@ class KodiDevice(IKodiDevice):
         """Seek to given position in seconds."""
         if media_position is None:
             return
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             await self._mpchc.seek(media_position * 1000)
             return ucapi.StatusCodes.OK
         if self._no_active_players:
@@ -2376,7 +2385,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_chapter(self, chapter_name: str):
         """Skip to given chapter name."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             chs = self._mpchc_tracks.get("chapters", []) if self._mpchc_tracks else []
             for ch in chs:
                 if ch["name"] == chapter_name:
@@ -2396,7 +2405,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_audio_track(self, track_name: str):
         """Skip to given audio track name."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             if self._mpchc_tracks:
                 for t in self._mpchc_tracks.get("audio", []):
                     if t.get("label", t.get("name", "")) == track_name:
@@ -2419,7 +2428,7 @@ class KodiDevice(IKodiDevice):
     @retry()
     async def select_subtitle_track(self, track_name: str):
         """Skip to given subtitle track name."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             if self._mpchc_tracks:
                 for t in self._mpchc_tracks.get("subtitle", []):
                     if t.get("label", t.get("name", "")) == track_name:
