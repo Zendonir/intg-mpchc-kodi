@@ -1968,7 +1968,7 @@ class KodiDevice(IKodiDevice):
     @property
     def sensor_play_status(self) -> str:
         """Return play status: playing / paused / stopped."""
-        _st = self._attr_state if self._mpchc is not None else self.state
+        _st = self._attr_state if self.mpchc_is_active_player else self.state
         if _st == MediaStates.PLAYING:
             return "playing"
         if _st == MediaStates.PAUSED:
@@ -1978,7 +1978,7 @@ class KodiDevice(IKodiDevice):
     @property
     def sensor_audio_stream(self) -> str:
         """Return the sensor audio stream."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             return self._mpchc_audio_track
         current_track = self.current_audio_track
         if current_track is None:
@@ -2009,7 +2009,7 @@ class KodiDevice(IKodiDevice):
     @property
     def sensor_subtitle_stream(self) -> str:
         """Return the sensor subtitle stream."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             return self._mpchc_subtitle_track
         current_track = self.current_subtitle_track
         if current_track is None:
@@ -2019,7 +2019,7 @@ class KodiDevice(IKodiDevice):
     @property
     def selector_audio_stream(self) -> str:
         """Return current audio stream label for the selector (current option)."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             if self._mpchc_tracks:
                 sel = next((t for t in self._mpchc_tracks.get("audio", []) if t.get("selected")), None)
                 if sel:
@@ -2030,7 +2030,7 @@ class KodiDevice(IKodiDevice):
     @property
     def selector_subtitle_stream(self) -> str:
         """Return current subtitle stream label for the selector (current option)."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             if self._mpchc_tracks:
                 sel = next((t for t in self._mpchc_tracks.get("subtitle", []) if t.get("selected")), None)
                 if sel:
@@ -2121,7 +2121,7 @@ class KodiDevice(IKodiDevice):
     @property
     def chapters(self) -> list[str]:
         """Return chapters names."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             if not self._mpchc_tracks:
                 return []
             return [ch["name"] for ch in self._mpchc_tracks.get("chapters", [])]
@@ -2132,7 +2132,7 @@ class KodiDevice(IKodiDevice):
     @property
     def current_chapter(self) -> str | None:
         """Current chapter title."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             chs = self._mpchc_tracks.get("chapters", []) if self._mpchc_tracks else []
             if not chs:
                 return None
@@ -2156,7 +2156,7 @@ class KodiDevice(IKodiDevice):
     @property
     def video_info(self) -> str:
         """Video information."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             video = self._mpchc_tracks.get("video", []) if self._mpchc_tracks else []
             if video:
                 v = video[0]
@@ -2171,7 +2171,7 @@ class KodiDevice(IKodiDevice):
     @property
     def audio_info(self) -> str:
         """Audio information."""
-        if self._mpchc is not None:
+        if self.mpchc_is_active_player:
             return self._mpchc_audio_track
         current_audio_stream = self._properties.get("currentaudiostream", {})
         if not current_audio_stream:
