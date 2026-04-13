@@ -74,7 +74,7 @@ class KodiConfigDevice:
     browse_media_root: str = field(default="")
     mpchc_host: str = field(default="")
     mpchc_port: int = field(default=13579)
-    mpchc_bridge_port: int = field(default=0)
+    mpchc_bridge_port: int = field(default=13580)
     mpchc_enabled: bool = field(default=False)
 
     # pylint: disable=R0801

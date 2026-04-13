@@ -113,12 +113,12 @@ class SetupFlow:
             },
             {
                 "id": "mpchc_info",
-                "label": {"en": "MPC-HC (optional)", "de": "MPC-HC (optional)"},
+                "label": {"en": "MPC-HC", "de": "MPC-HC"},
                 "field": {
                     "label": {
                         "value": {
-                            "en": "MPC-HC is optional. Leave host empty to use Kodi only.",
-                            "de": "MPC-HC ist optional. Host leer lassen für reinen Kodi-Betrieb.",
+                            "en": "Enter the IP address of the PC running MPC-HC and the bridge.",
+                            "de": "IP-Adresse des PCs mit MPC-HC und der Bridge eingeben.",
                         }
                     }
                 },
@@ -126,7 +126,7 @@ class SetupFlow:
             {
                 "field": {"text": {"value": ""}},
                 "id": "mpchc_host",
-                "label": {"en": "MPC-HC host (optional)", "de": "MPC-HC Host (optional)"},
+                "label": {"en": "MPC-HC host", "de": "MPC-HC Host"},
             },
             {
                 "field": {"text": {"value": "13579"}},
@@ -134,11 +134,11 @@ class SetupFlow:
                 "label": {"en": "MPC-HC port", "de": "MPC-HC Port"},
             },
             {
-                "field": {"text": {"value": "0"}},
+                "field": {"text": {"value": "13580"}},
                 "id": "mpchc_bridge_port",
                 "label": {
-                    "en": "Bridge port (0 = HTTP polling, 13580 = WebSocket push)",
-                    "de": "Bridge Port (0 = HTTP Polling, 13580 = WebSocket Push)",
+                    "en": "Bridge port",
+                    "de": "Bridge Port",
                 },
             },
             *copy.deepcopy(SETUP_FIELDS),
@@ -644,9 +644,9 @@ class SetupFlow:
         except ValueError:
             mpchc_port = 13579
         try:
-            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "0"))
+            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "13580"))
         except ValueError:
-            mpchc_bridge_port = 0
+            mpchc_bridge_port = 13580
 
         try:
             sensor_audio_stream_config = int(
@@ -802,9 +802,9 @@ class SetupFlow:
         except ValueError:
             mpchc_port = 13579
         try:
-            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "0"))
+            mpchc_bridge_port = int(msg.input_values.get("mpchc_bridge_port", "13580"))
         except ValueError:
-            mpchc_bridge_port = 0
+            mpchc_bridge_port = 13580
         name = msg.input_values["name"]
         try:
             sensor_audio_stream_config = int(
